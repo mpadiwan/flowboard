@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { JsonWebTokenError } from 'jsonwebtoken';
 import { ZodError } from 'zod';
 import { env } from '../config/env';
 import { logger } from '../lib/logger';
@@ -58,8 +59,7 @@ function errorBody(message: string, code: string): ErrorBody {
   return { success: false, message, code };
 }
 
-// Mapping table: ARCH §7. The jsonwebtoken (→ 401) branch joins this function with
-// week-01, when that package is added.
+// Mapping table: ARCH §7.
 function toHttpError(err: unknown): HttpError {
   if (isAppError(err)) {
     return { statusCode: err.statusCode, body: errorBody(err.message, err.code) };
@@ -97,6 +97,12 @@ function toHttpError(err: unknown): HttpError {
     if (err.code === 'P2002') {
       return { statusCode: 409, body: errorBody('Resource already exists', 'CONFLICT') };
     }
+  }
+
+  // TokenExpiredError and NotBeforeError extend JsonWebTokenError. The library's own
+  // message ("invalid signature", "jwt expired") is not echoed to the client.
+  if (err instanceof JsonWebTokenError) {
+    return { statusCode: 401, body: errorBody('Invalid or expired token', 'UNAUTHORIZED') };
   }
 
   const message =

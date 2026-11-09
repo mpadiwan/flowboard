@@ -81,10 +81,13 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - Every endpoint has at least one happy-path and one error-path test; every feature commit ships with its tests.
 - Test files live in `api/tests/` with their own `tsconfig.json`; `npm run typecheck` checks them, because ts-jest only transpiles (`isolatedModules`).
 - Every test starts from empty tables (`TRUNCATE … CASCADE` in `tests/setup/afterEnv.ts`), so each test creates its own fixtures in `beforeEach`.
-- Create real fixtures through helpers (`registerAndLogin()`, `createBoard()`); never fake IDs such as `'some-uuid'`.
+- Create real fixtures through helpers (`createUser()`, `createBoard()`); never fake IDs such as `'some-uuid'`.
+- Protected-route tests authenticate with `request.agent(app).set('Authorization', bearer(user.id))`. `bearer()` signs a token directly, so bcrypt cost 12 stays in `auth.test.ts` only. The 401 cases use a bare `request(app)` and `rejectedAuthHeaders()`.
+- To prove a write is atomic, make its second step fail with `jest.spyOn(module, 'fn').mockRejectedValueOnce(...)` on the imported module namespace, then assert the first write isn't there.
 - Mock only to reach failure branches (Redis throwing, Prisma rejecting) — never to skip real behaviour on the happy path.
 
 ## Dependencies
 
 - Pin exact versions (no `^`/`~`), stay on the brief's major versions, and commit lockfiles.
 - New runtime dependencies need a reason in the PR/commit body.
+- After `package.json` changes, recreate the containers with `docker compose [-f docker-compose.test.yml] up -d --build --renew-anon-volumes`. `/app/node_modules` is an anonymous volume, so `--build` alone keeps the old modules ("Cannot find module").

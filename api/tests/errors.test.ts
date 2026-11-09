@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
+import { JsonWebTokenError, NotBeforeError, TokenExpiredError } from 'jsonwebtoken';
 import request from 'supertest';
 import { z } from 'zod';
 import app from '../src/app';
@@ -88,6 +89,21 @@ describe('globalErrorHandler', () => {
 
     expect(res.status).toBe(500);
     expect((res.body as ErrorResponse).code).toBe('INTERNAL_ERROR');
+  });
+
+  it.each([
+    ['JsonWebTokenError', new JsonWebTokenError('invalid signature')],
+    ['TokenExpiredError', new TokenExpiredError('jwt expired', new Date())],
+    ['NotBeforeError', new NotBeforeError('jwt not active', new Date())],
+  ])('maps a %s to 401 UNAUTHORIZED without echoing its message', async (_name, err) => {
+    const res = await request(appThrowing(err)).get('/boom');
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({
+      success: false,
+      message: 'Invalid or expired token',
+      code: 'UNAUTHORIZED',
+    });
   });
 
   it('maps an unknown error to 500 and includes the stack outside production', async () => {

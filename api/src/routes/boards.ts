@@ -2,12 +2,11 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { prisma } from '../lib/prisma';
 import { getOwnedBoard } from '../lib/ownership';
 import { requireUserId } from '../lib/requestUser';
-import { actingUser } from '../middleware/actingUser';
+import { authenticate } from '../middleware/authenticate';
 import { CreateBoardSchema } from '../schemas/board';
 import { IdParamSchema } from '../schemas/common';
 
-// FR-B1 to FR-B4. Every route is scoped to the caller (ADR-003); until week-01 the
-// caller is the acting-user stub instead of a verified JWT.
+// FR-B1 to FR-B4. Every route needs a Bearer token and is scoped to the caller (ADR-003).
 
 export const listBoards = async (
   req: Request,
@@ -75,8 +74,7 @@ export const deleteBoard = async (
 
 const router: Router = Router();
 
-// week-01: replace with authenticate.
-router.use(actingUser);
+router.use(authenticate);
 
 router.get('/', listBoards);
 router.post('/', createBoard);
