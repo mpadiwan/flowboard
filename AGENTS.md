@@ -102,7 +102,7 @@ Only build on what exists. Tick a line when its milestone commit lands.
 
 - [x] `day-01` — Docker Compose stack, Nginx, TypeScript, env config, logger, AppError + global error handler
 - [x] `day-02` — typed task routes with Zod
-- [ ] `day-03` — Prisma schema, migration, seed
+- [x] `day-03` — Prisma schema, migration, seed
 - [ ] `day-04` — boards CRUD, full route layer
 - [ ] `week-01 complete` — register/login, `authenticate`, AuditLog on task mutations
 - [ ] `day-06` — Redis client, rate limiter

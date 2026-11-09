@@ -7,6 +7,9 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: z.string().url(),
+  BCRYPT_COST: z.coerce.number().int().min(12).default(12),
+  // Read only by prisma/seed.ts, which refuses to run without it.
+  SEED_USER_PASSWORD: z.string().min(8).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

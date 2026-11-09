@@ -19,6 +19,9 @@ services:
       target: dev
     init: true
     env_file: .env
+    # Prisma Studio only (ADR-002), bound to loopback. Start it with `npm run db:studio`.
+    ports:
+      - '127.0.0.1:5555:5555'
     volumes:
       - ./api:/app
       # Keeps the image's node_modules from being hidden by the bind mount.

@@ -71,6 +71,7 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - Every function declares its return type (lint: `explicit-function-return-type`; inline callbacks are exempt).
 - Unused parameters required by a signature (e.g. Express's `next`) are prefixed with `_`.
 - Prefer `interface` for object shapes, `type` for unions and `z.infer` results.
+- TypeScript outside `api/src/` (`tests/`, `prisma/`) gets its own `tsconfig.json` that extends `api/tsconfig.json` with `rootDir: ".."` and is added to `npm run typecheck`; otherwise `tsc` skips it and ESLint's `projectService` fails on it.
 
 ## Tests (from plan Day 2)
 

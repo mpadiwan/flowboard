@@ -80,6 +80,13 @@ docker compose -f docker-compose.test.yml exec api npx jest
 docker compose exec api npx prisma migrate dev --name <change>
 ```
 
+**Seed data:** `prisma/seed.ts` creates `dev@flowboard.test` (password: `SEED_USER_PASSWORD` from `.env`), 2 boards and 3 tasks. It is idempotent, so running it again changes nothing. `migrate dev` and `migrate reset` run it automatically; `migrate deploy`, which runs on start, never does.
+
+```bash
+docker compose exec api npx prisma db seed
+docker compose exec api npm run db:studio   # Prisma Studio on http://localhost:5555
+```
+
 ## Commits
 
 Husky runs ESLint and Prettier on staged files, and commitlint checks each commit message.
