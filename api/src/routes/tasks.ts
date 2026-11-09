@@ -1,25 +1,39 @@
-import type { Task } from '@prisma/client';
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import { AppError } from '../errors/AppError';
 import { prisma } from '../lib/prisma';
-import { CreateTaskSchema, IdParamSchema, UpdateTaskSchema } from '../schemas/task';
+import { getOwnedBoard, getOwnedTask } from '../lib/ownership';
+import { requireUserId } from '../lib/requestUser';
+import { actingUser } from '../middleware/actingUser';
+import { IdParamSchema } from '../schemas/common';
+import { CreateTaskSchema, ListTasksQuerySchema, UpdateTaskSchema } from '../schemas/task';
 
-// FR-T2 to FR-T5. Until week-01 these routes have no `authenticate` middleware and no
-// ownership check (ADR-003); task events are published from day-08 (ADR-006).
+// FR-T1 to FR-T5. Every route is scoped to the caller through the task's board (ADR-003);
+// until week-01 the caller is the acting-user stub. Task events are published from
+// day-08 (ADR-006).
 
-// Becomes getOwnedTask (404 if missing, 403 if not the caller's) once auth lands.
-async function findTaskOrThrow(id: string): Promise<Task> {
-  const task = await prisma.task.findUnique({ where: { id } });
-  if (!task) {
-    throw new AppError('Task not found', 404, 'TASK_NOT_FOUND');
+export const listTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = requireUserId(req);
+    const { boardId } = ListTasksQuerySchema.parse(req.query);
+
+    // A boardId filter must name one of the caller's boards: 404 if missing, 403 if not theirs.
+    if (boardId) {
+      await getOwnedBoard(boardId, userId);
+    }
+    const tasks = await prisma.task.findMany({
+      where: boardId ? { boardId } : { board: { ownerId: userId } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: tasks });
+  } catch (err) {
+    next(err);
   }
-  return task;
-}
+};
 
 export const getTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const userId = requireUserId(req);
     const { id } = IdParamSchema.parse(req.params);
-    const task = await findTaskOrThrow(id);
+    const task = await getOwnedTask(id, userId);
     res.json({ success: true, data: task });
   } catch (err) {
     next(err);
@@ -32,12 +46,9 @@ export const createTask = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
+    const userId = requireUserId(req);
     const input = CreateTaskSchema.parse(req.body);
-
-    const board = await prisma.board.findUnique({ where: { id: input.boardId } });
-    if (!board) {
-      throw new AppError('Board not found', 404, 'BOARD_NOT_FOUND');
-    }
+    await getOwnedBoard(input.boardId, userId);
 
     // Named fields only: req.body is never spread into Prisma (ADR-007, AC-3.4).
     const task = await prisma.task.create({
@@ -62,9 +73,10 @@ export const updateTask = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
+    const userId = requireUserId(req);
     const { id } = IdParamSchema.parse(req.params);
     const input = UpdateTaskSchema.parse(req.body);
-    await findTaskOrThrow(id);
+    await getOwnedTask(id, userId);
 
     // Prisma skips undefined fields; a null description clears it.
     const task = await prisma.task.update({
@@ -89,8 +101,9 @@ export const deleteTask = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
+    const userId = requireUserId(req);
     const { id } = IdParamSchema.parse(req.params);
-    await findTaskOrThrow(id);
+    await getOwnedTask(id, userId);
     await prisma.task.delete({ where: { id } });
     // day-08: publishTaskEvent('DELETED', task snapshot from before the delete)
     res.status(204).end();
@@ -101,6 +114,10 @@ export const deleteTask = async (
 
 const router: Router = Router();
 
+// week-01: replace with authenticate.
+router.use(actingUser);
+
+router.get('/', listTasks);
 router.get('/:id', getTask);
 router.post('/', createTask);
 router.patch('/:id', updateTask);

@@ -1,10 +1,11 @@
-import type { Board, Task } from '@prisma/client';
+import type { Board, Task, User } from '@prisma/client';
 import request from 'supertest';
 import app from '../src/app';
 import { prisma } from '../src/lib/prisma';
-import { createBoard } from './helpers/factories';
+import { createActingUser, createBoard, createUser } from './helpers/factories';
 
-// FR-T2 to FR-T5 and AC-3.1 to AC-3.5. Auth (401) and ownership (403) cases join with week-01.
+// FR-T1 to FR-T5, AC-2.7 and AC-3.1 to AC-3.5. Until week-01 every request acts as the
+// seed user (actingUser stub); the 401 cases join with authenticate.
 
 const MISSING_ID = '00000000-0000-4000-8000-000000000000';
 
@@ -20,14 +21,83 @@ interface TaskResponse {
   data: Task;
 }
 
+interface TaskListResponse {
+  success: true;
+  data: Task[];
+}
+
 async function createTask(boardId: string, title = 'Write tests'): Promise<Task> {
   return prisma.task.create({ data: { title, boardId } });
 }
 
+let me: User;
 let board: Board;
+// A board and task owned by someone else, for the 403 cases (AC-2.7).
+let otherBoard: Board;
 
 beforeEach(async () => {
-  board = await createBoard();
+  me = await createActingUser();
+  board = await createBoard(me.id);
+  otherBoard = await createBoard((await createUser()).id, 'Not mine');
+});
+
+describe('GET /tasks', () => {
+  it("lists tasks on all of the caller's boards, newest first", async () => {
+    const second = await createBoard(me.id, 'Second');
+    const older = await prisma.task.create({
+      data: { title: 'Older', boardId: board.id, createdAt: new Date('2026-01-01') },
+    });
+    const newer = await prisma.task.create({
+      data: { title: 'Newer', boardId: second.id, createdAt: new Date('2026-02-01') },
+    });
+    await createTask(otherBoard.id, 'Someone else');
+
+    const res = await request(app).get('/tasks');
+
+    expect(res.status).toBe(200);
+    const body = res.body as TaskListResponse;
+    expect(body.success).toBe(true);
+    expect(body.data.map((task) => task.id)).toEqual([newer.id, older.id]);
+  });
+
+  it('filters by boardId', async () => {
+    const second = await createBoard(me.id, 'Second');
+    const onBoard = await createTask(board.id, 'On board');
+    await createTask(second.id, 'Elsewhere');
+
+    const res = await request(app).get('/tasks').query({ boardId: board.id });
+
+    expect(res.status).toBe(200);
+    expect((res.body as TaskListResponse).data.map((task) => task.id)).toEqual([onBoard.id]);
+  });
+
+  it('returns an empty list when the caller has no tasks', async () => {
+    const res = await request(app).get('/tasks');
+
+    expect(res.status).toBe(200);
+    expect((res.body as TaskListResponse).data).toEqual([]);
+  });
+
+  it("returns 403 FORBIDDEN for someone else's boardId", async () => {
+    const res = await request(app).get('/tasks').query({ boardId: otherBoard.id });
+
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorResponse).code).toBe('FORBIDDEN');
+  });
+
+  it('returns 404 BOARD_NOT_FOUND for a missing boardId', async () => {
+    const res = await request(app).get('/tasks').query({ boardId: MISSING_ID });
+
+    expect(res.status).toBe(404);
+    expect((res.body as ErrorResponse).code).toBe('BOARD_NOT_FOUND');
+  });
+
+  it('returns 422 when boardId is not a UUID', async () => {
+    const res = await request(app).get('/tasks').query({ boardId: 'abc' });
+
+    expect(res.status).toBe(422);
+    expect((res.body as ErrorResponse).details?.[0]?.path).toBe('boardId');
+  });
 });
 
 describe('POST /tasks', () => {
@@ -117,6 +187,14 @@ describe('POST /tasks', () => {
     expect((res.body as ErrorResponse).code).toBe('BOARD_NOT_FOUND');
   });
 
+  it("returns 403 FORBIDDEN on someone else's board and creates nothing", async () => {
+    const res = await request(app).post('/tasks').send({ title: 'ok', boardId: otherBoard.id });
+
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorResponse).code).toBe('FORBIDDEN');
+    expect(await prisma.task.count({ where: { boardId: otherBoard.id } })).toBe(0);
+  });
+
   it('returns 400 INVALID_JSON for a malformed body', async () => {
     const res = await request(app)
       .post('/tasks')
@@ -143,6 +221,15 @@ describe('GET /tasks/:id', () => {
 
     expect(res.status).toBe(404);
     expect((res.body as ErrorResponse).code).toBe('TASK_NOT_FOUND');
+  });
+
+  it("returns 403 FORBIDDEN for someone else's task (AC-2.7)", async () => {
+    const task = await createTask(otherBoard.id);
+
+    const res = await request(app).get(`/tasks/${task.id}`);
+
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorResponse).code).toBe('FORBIDDEN');
   });
 
   it('returns 422 for a non-UUID id (AC-3.2)', async () => {
@@ -182,7 +269,7 @@ describe('PATCH /tasks/:id', () => {
 
   it('ignores boardId: a task cannot move boards', async () => {
     const task = await createTask(board.id);
-    const other = await createBoard('Other');
+    const other = await createBoard(me.id, 'Other');
 
     const res = await request(app)
       .patch(`/tasks/${task.id}`)
@@ -212,6 +299,17 @@ describe('PATCH /tasks/:id', () => {
     expect((res.body as ErrorResponse).code).toBe('TASK_NOT_FOUND');
   });
 
+  it("returns 403 FORBIDDEN for someone else's task and leaves it unchanged", async () => {
+    const task = await createTask(otherBoard.id, 'Original');
+
+    const res = await request(app).patch(`/tasks/${task.id}`).send({ title: 'Hijacked' });
+
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorResponse).code).toBe('FORBIDDEN');
+    const stored = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(stored.title).toBe('Original');
+  });
+
   it('returns 422 for a non-UUID id', async () => {
     const res = await request(app).patch('/tasks/123').send({ title: 'x' });
 
@@ -236,6 +334,16 @@ describe('DELETE /tasks/:id', () => {
 
     expect(res.status).toBe(404);
     expect((res.body as ErrorResponse).code).toBe('TASK_NOT_FOUND');
+  });
+
+  it("returns 403 FORBIDDEN for someone else's task and keeps it", async () => {
+    const task = await createTask(otherBoard.id);
+
+    const res = await request(app).delete(`/tasks/${task.id}`);
+
+    expect(res.status).toBe(403);
+    expect((res.body as ErrorResponse).code).toBe('FORBIDDEN');
+    expect(await prisma.task.findUnique({ where: { id: task.id } })).not.toBeNull();
   });
 
   it('returns 422 for a non-UUID id', async () => {

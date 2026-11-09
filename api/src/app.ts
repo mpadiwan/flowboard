@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import { globalErrorHandler, notFound } from './errors/AppError';
+import boardsRouter from './routes/boards';
 import tasksRouter from './routes/tasks';
 
 // Builds the Express app without listening, so Supertest can import it (ARCH §3, C1.5).
@@ -10,6 +11,7 @@ const app: Express = express();
 app.use(express.json());
 
 // Feature routers are mounted here at the root (Nginx strips /api, ADR-002).
+app.use('/boards', boardsRouter);
 app.use('/tasks', tasksRouter);
 
 app.use(notFound);

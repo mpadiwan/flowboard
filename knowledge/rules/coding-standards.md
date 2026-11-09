@@ -30,8 +30,9 @@ _The detail behind the rules in [AGENTS.md](../../AGENTS.md). Each rule cites th
 ```ts
 export const getTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const userId = requireUserId(req); // 401 if the router's guard didn't set req.user
     const { id } = IdParamSchema.parse(req.params);
-    const task = await getOwnedTask(id, req.user.id); // 404 / 403 inside
+    const task = await getOwnedTask(id, userId); // 404 / 403 inside (lib/ownership.ts)
     res.json({ success: true, data: task });
   } catch (err) {
     next(err);
@@ -43,7 +44,8 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - Build Prisma `data` from named fields of the parsed object. Never `...req.body`.
 - Success responses always use `{ success: true, data }`; `DELETE` returns `res.status(204).end()`.
 - Throw `AppError` for expected failures; let unexpected errors propagate to `next(err)`.
-- Ownership: load, then check — 404 if missing, 403 if not the caller's (ADR-003).
+- Ownership: load, then check — 404 if missing, 403 if not the caller's (ADR-003). Use `getOwnedBoard` / `getOwnedTask` from `lib/ownership.ts`; don't re-implement the check in a handler.
+- `req.user` is optional in the type (`types/express.d.ts`). Read it only through `requireUserId(req)`, never `req.user!.id`.
 
 ## Middleware
 
