@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "nexus": {
+      "command": "/Users/margauxpadiwan/.local/bin/uvx",
+      "args": [
+        "--refresh",
+        "--from",
+        "nexus-dev-toolkit",
+        "nexus-mcp"
+      ]
+    }
+  }
+}

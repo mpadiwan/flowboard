@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "graphify update . --force 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}
