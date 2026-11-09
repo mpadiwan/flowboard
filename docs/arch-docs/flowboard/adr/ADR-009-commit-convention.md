@@ -50,4 +50,4 @@ With that commitlint config, a `day-01: …` message is **rejected**, because `d
 | 14  | `day-14: health checks, DLQ documentation`                                    | 7              |
 | 15  | `week-03 complete: OWASP hardening, production patterns, Security Gate ready` | 7              |
 
-**Ordering conflict:** `day-02` (typed task routes) comes before `day-03` (Prisma schema) in the brief. The routes need Prisma types to compile, so on plan Day 2 the schema is built first and committed with `day-02`, and the seed and migration verification are committed as `day-03`. The tag order in the history stays the brief's order.
+**Ordering conflict:** `day-02` (typed task routes) comes before `day-03` (Prisma schema) in the brief. The routes need Prisma types to compile, so on plan Day 2 the schema is built first and committed with `day-02`, and the seed and migration verification are committed as `day-03`. The `init` migration also lands with `day-02`, because the `day-02` integration tests need its tables; `day-03` verifies it on a fresh clone. The tag order in the history stays the brief's order.

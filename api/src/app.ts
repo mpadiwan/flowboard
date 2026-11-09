@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import { globalErrorHandler, notFound } from './errors/AppError';
+import tasksRouter from './routes/tasks';
 
 // Builds the Express app without listening, so Supertest can import it (ARCH §3, C1.5).
 // Middleware order follows ARCH §6; helmet, cors, the 10kb body limit and pino-http
@@ -9,6 +10,7 @@ const app: Express = express();
 app.use(express.json());
 
 // Feature routers are mounted here at the root (Nginx strips /api, ADR-002).
+app.use('/tasks', tasksRouter);
 
 app.use(notFound);
 app.use(globalErrorHandler);

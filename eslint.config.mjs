@@ -13,7 +13,8 @@ export default defineConfig(
     languageOptions: {
       globals: globals.node,
       parserOptions: {
-        projectService: true,
+        // jest.config.ts sits outside every tsconfig, so it gets the default project.
+        projectService: { allowDefaultProject: ['api/jest.config.ts'] },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -27,6 +28,17 @@ export default defineConfig(
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+  {
+    // Express 4 takes async handlers as void callbacks. Every handler and async middleware
+    // wraps its body in try/catch and calls next(err) (AGENTS.md), so the promise never rejects.
+    files: ['api/src/routes/**/*.ts', 'api/src/middleware/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { arguments: false } },
       ],
     },
   },

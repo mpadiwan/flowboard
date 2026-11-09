@@ -67,11 +67,17 @@ npm install && npm --prefix api install && npm --prefix worker install
 | `npm run lint`      | ESLint, including no `console`, no `any` and annotated return types |
 | `npm run format`    | Prettier                                                            |
 
-Tests arrive with plan Day 2 and run exactly as the brief specifies:
+Tests run exactly as the brief specifies. The test stack is a separate Compose project (`flowboard-test`) with its own throwaway `*_test` database, so it never touches dev data. Jest runs serially and fails if line or branch coverage drops below 80% (ADR-008).
 
 ```bash
-docker compose -f docker-compose.test.yml up -d --build
+docker compose -f docker-compose.test.yml up -d --build   # once; applies migrations
 docker compose -f docker-compose.test.yml exec api npx jest
+```
+
+**Schema changes:** the api applies pending migrations on every start. To create a new one after editing `api/prisma/schema.prisma`:
+
+```bash
+docker compose exec api npx prisma migrate dev --name <change>
 ```
 
 ## Commits

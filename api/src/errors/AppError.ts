@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { ZodError } from 'zod';
 import { env } from '../config/env';
@@ -57,8 +58,8 @@ function errorBody(message: string, code: string): ErrorBody {
   return { success: false, message, code };
 }
 
-// Mapping table: ARCH §7. Prisma (P2025 → 404, P2002 → 409) and jsonwebtoken (→ 401)
-// branches join this function with day-03 and week-01, when those packages are added.
+// Mapping table: ARCH §7. The jsonwebtoken (→ 401) branch joins this function with
+// week-01, when that package is added.
 function toHttpError(err: unknown): HttpError {
   if (isAppError(err)) {
     return { statusCode: err.statusCode, body: errorBody(err.message, err.code) };
@@ -85,6 +86,16 @@ function toHttpError(err: unknown): HttpError {
     }
     if (err.status < 500) {
       return { statusCode: err.status, body: errorBody(err.message, 'INVALID_REQUEST_BODY') };
+    }
+  }
+
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    // P2025: the record to update or delete no longer exists. P2002: unique constraint.
+    if (err.code === 'P2025') {
+      return { statusCode: 404, body: errorBody('Resource not found', 'NOT_FOUND') };
+    }
+    if (err.code === 'P2002') {
+      return { statusCode: 409, body: errorBody('Resource already exists', 'CONFLICT') };
     }
   }
 

@@ -48,6 +48,7 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 ## Middleware
 
 - Async middleware wraps its whole body in try/catch and calls `next(err)` (Express 4 does not catch async throws).
+- That rule is why `no-misused-promises` (`checksVoidReturn.arguments`) is relaxed only for `src/routes/**` and `src/middleware/**`. Async code in any other folder that is passed as a callback must handle its own promise.
 - Redis-backed middleware decides its failure mode explicitly per ADR-005 and logs at `warn` when failing open.
 
 ## Errors
@@ -75,6 +76,8 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 
 - Integration tests use Supertest against `app` (never a listening server) and a real Postgres + Redis in the `flowboard-test` Compose project (ADR-008).
 - Every endpoint has at least one happy-path and one error-path test; every feature commit ships with its tests.
+- Test files live in `api/tests/` with their own `tsconfig.json`; `npm run typecheck` checks them, because ts-jest only transpiles (`isolatedModules`).
+- Every test starts from empty tables (`TRUNCATE … CASCADE` in `tests/setup/afterEnv.ts`), so each test creates its own fixtures in `beforeEach`.
 - Create real fixtures through helpers (`registerAndLogin()`, `createBoard()`); never fake IDs such as `'some-uuid'`.
 - Mock only to reach failure branches (Redis throwing, Prisma rejecting) — never to skip real behaviour on the happy path.
 

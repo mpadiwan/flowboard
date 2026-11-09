@@ -1,0 +1,52 @@
+# FlowBoard test stack (ADR-008, ARCH §11.2). Standalone, not an override: the brief's
+# command passes only this file. Its own project name keeps it from replacing dev containers.
+#   docker compose -f docker-compose.test.yml up -d --build
+#   docker compose -f docker-compose.test.yml exec api npx jest
+name: flowboard-test
+
+services:
+  api:
+    build:
+      context: ./api
+      target: dev
+    init: true
+    env_file: .env
+    environment:
+      NODE_ENV: test
+      # Error-path tests log every 500; keep the Jest output readable.
+      LOG_LEVEL: silent
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}_test
+    # Apply migrations, then stay up for `exec`; Jest imports the app and never listens.
+    command: ['sh', '-c', 'npx prisma migrate deploy && tail -f /dev/null']
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}_test
+    # Disposable: every `up` starts from an empty database.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Not used by the api until day-06; started now so the stack matches ADR-008.
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10

@@ -1,0 +1,71 @@
+// FlowBoard data model (ARCH §4). Lines marked (+) are deliberate additions to the
+// handbook schema, explained in ADR-003. The worker generates its client from this file.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"] // (+) node:22-slim is Debian 12
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique // stored lower-cased
+  password  String // bcrypt hash, never returned by the API
+  createdAt DateTime   @default(now())
+  boards    Board[]
+  auditLogs AuditLog[]
+}
+
+model Board {
+  id        String   @id @default(uuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  tasks     Task[]
+  createdAt DateTime @default(now())
+
+  @@index([ownerId]) // (+)
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+  boardId     String
+  board       Board      @relation(fields: [boardId], references: [id], onDelete: Cascade) // (+)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([boardId]) // (+)
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String // CREATED | UPDATED | DELETED
+  entity    String // "Task"
+  entityId  String // task id; no FK, so the row outlives a deleted task
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt]) // (+)
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}

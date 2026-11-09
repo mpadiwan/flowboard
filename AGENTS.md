@@ -101,7 +101,7 @@ _Filled in with `day-14` (brief §5.6 requires it here). Draft: ARCH §9.3._
 Only build on what exists. Tick a line when its milestone commit lands.
 
 - [x] `day-01` — Docker Compose stack, Nginx, TypeScript, env config, logger, AppError + global error handler
-- [ ] `day-02` — typed task routes with Zod
+- [x] `day-02` — typed task routes with Zod
 - [ ] `day-03` — Prisma schema, migration, seed
 - [ ] `day-04` — boards CRUD, full route layer
 - [ ] `week-01 complete` — register/login, `authenticate`, AuditLog on task mutations

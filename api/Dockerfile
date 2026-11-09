@@ -12,5 +12,8 @@ FROM base AS dev
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# The generated client lives in node_modules, which the compose anonymous volume keeps.
+RUN npx prisma generate
 EXPOSE 3000
-CMD ["node_modules/.bin/tsx", "watch", "src/server.ts"]
+# Migrations run on every start, so a fresh clone gets its tables with no manual step.
+CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx watch src/server.ts"]
