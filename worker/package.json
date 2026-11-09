@@ -1,0 +1,26 @@
+{
+  "name": "flowboard-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FlowBoard background worker: consumes tasks:events and writes AuditLog rows.",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pino": "8.21.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "pino-pretty": "11.3.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

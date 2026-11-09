@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+graphify-out/
+package-lock.json
+
+# Source material converted from .docx; keep it byte-for-byte as received.
+docs/*.docx.md
+
+# Generated or third-party tooling files.
+knowledge/rules/arch-summary.md
+.claude/
+.mcp.json

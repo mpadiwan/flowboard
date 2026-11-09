@@ -1,0 +1,4 @@
+# Host node_modules must never reach the image: they hold macOS-native binaries.
+node_modules
+dist
+coverage

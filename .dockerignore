@@ -1,0 +1,12 @@
+# Build context for worker/Dockerfile is the repo root (ADR-001).
+# Host node_modules must never reach an image: they hold macOS-native binaries.
+**/node_modules
+**/dist
+**/coverage
+.git
+.husky
+.env
+.env.*
+graphify-out
+docs
+knowledge
