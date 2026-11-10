@@ -1,11 +1,12 @@
 import type { Board, Task, User } from '@prisma/client';
 import request from 'supertest';
 import app from '../src/app';
-import * as audit from '../src/lib/audit';
+import { TASK_EVENTS_STREAM } from '../src/lib/events';
 import { prisma } from '../src/lib/prisma';
+import { redis } from '../src/lib/redis';
 import { bearer, createBoard, createUser, rejectedAuthHeaders } from './helpers/factories';
 
-// FR-T1 to FR-T5, AC-2.6, AC-2.7, AC-3.1 to AC-3.5 and AC-6.3. `api` sends the caller's
+// FR-T1 to FR-T5, AC-2.6, AC-2.7, AC-3.1 to AC-3.5 and AC-5.3. `api` sends the caller's
 // Bearer token on every request; the 401 cases use a bare request(app).
 
 const MISSING_ID = '00000000-0000-4000-8000-000000000000';
@@ -31,14 +32,35 @@ async function createTask(boardId: string, title = 'Write tests'): Promise<Task>
   return prisma.task.create({ data: { title, boardId } });
 }
 
-// AC-6.3: the AuditLog rows written so far, as the fields the brief specifies.
-async function auditRows(): Promise<
-  { userId: string; action: string; entity: string; entityId: string }[]
-> {
-  return prisma.auditLog.findMany({
-    select: { userId: true, action: true, entity: true, entityId: true },
-    orderBy: { createdAt: 'asc' },
+interface PublishedEvent {
+  action: string;
+  taskId: string;
+  userId: string;
+  payload: unknown;
+}
+
+// AC-5.3: the tasks:events entries published so far (ARCH §9.3), oldest first. The test
+// stack has no worker, so the AuditLog rows themselves are checked against the dev stack.
+async function streamEvents(): Promise<PublishedEvent[]> {
+  const entries = await redis.xrange(TASK_EVENTS_STREAM, '-', '+');
+  return entries.map(([, fields]) => {
+    const values = new Map<string, string>();
+    for (let i = 0; i < fields.length; i += 2) {
+      values.set(fields[i] ?? '', fields[i + 1] ?? '');
+    }
+    expect(Number(values.get('ts'))).toBeGreaterThan(0);
+    return {
+      action: values.get('action') ?? '',
+      taskId: values.get('taskId') ?? '',
+      userId: values.get('userId') ?? '',
+      payload: JSON.parse(values.get('payload') ?? 'null') as unknown,
+    };
   });
+}
+
+// The task as it travels in a payload or a response body: dates become ISO strings.
+function asJson(task: Task): unknown {
+  return JSON.parse(JSON.stringify(task)) as unknown;
 }
 
 type Agent = ReturnType<typeof request.agent>;
@@ -79,14 +101,14 @@ describe('authentication (AC-2.6)', () => {
     }
   });
 
-  it('does not change a task or write an audit row without a token', async () => {
+  it('does not change a task or publish an event without a token', async () => {
     const task = await createTask(board.id, 'Original');
 
     await request(app).patch(`/tasks/${task.id}`).send({ title: 'Hijacked' });
 
     const stored = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     expect(stored.title).toBe('Original');
-    expect(await prisma.auditLog.count()).toBe(0);
+    expect(await streamEvents()).toEqual([]);
   });
 });
 
@@ -163,23 +185,9 @@ describe('POST /tasks', () => {
       status: 'TODO',
       boardId: board.id,
     });
-    expect(await auditRows()).toEqual([
-      { userId: me.id, action: 'CREATED', entity: 'Task', entityId: body.data.id },
+    expect(await streamEvents()).toEqual([
+      { action: 'CREATED', taskId: body.data.id, userId: me.id, payload: body.data },
     ]);
-  });
-
-  it('rolls back the task when its audit row cannot be written', async () => {
-    const spy = jest
-      .spyOn(audit, 'recordTaskAudit')
-      .mockRejectedValueOnce(new Error('audit insert failed'));
-    try {
-      const res = await api.post('/tasks').send({ title: 'Unaudited', boardId: board.id });
-
-      expect(res.status).toBe(500);
-      expect(await prisma.task.count()).toBe(0);
-    } finally {
-      spy.mockRestore();
-    }
   });
 
   it('accepts optional description, priority and status', async () => {
@@ -255,7 +263,7 @@ describe('POST /tasks', () => {
     expect(res.status).toBe(403);
     expect((res.body as ErrorResponse).code).toBe('FORBIDDEN');
     expect(await prisma.task.count({ where: { boardId: otherBoard.id } })).toBe(0);
-    expect(await auditRows()).toEqual([]);
+    expect(await streamEvents()).toEqual([]);
   });
 
   it('returns 400 INVALID_JSON for a malformed body', async () => {
@@ -307,13 +315,14 @@ describe('PATCH /tasks/:id', () => {
     const res = await api.patch(`/tasks/${task.id}`).send({ title: 'Renamed', status: 'DONE' });
 
     expect(res.status).toBe(200);
-    expect((res.body as TaskResponse).data).toMatchObject({
+    const body = res.body as TaskResponse;
+    expect(body.data).toMatchObject({
       title: 'Renamed',
       status: 'DONE',
       priority: 'MEDIUM',
     });
-    expect(await auditRows()).toEqual([
-      { userId: me.id, action: 'UPDATED', entity: 'Task', entityId: task.id },
+    expect(await streamEvents()).toEqual([
+      { action: 'UPDATED', taskId: task.id, userId: me.id, payload: body.data },
     ]);
   });
 
@@ -351,7 +360,7 @@ describe('PATCH /tasks/:id', () => {
 
     expect(res.status).toBe(422);
     expect((res.body as ErrorResponse).message).toContain('At least one field must be provided');
-    expect(await auditRows()).toEqual([]);
+    expect(await streamEvents()).toEqual([]);
   });
 
   it('returns 404 TASK_NOT_FOUND for a missing task', async () => {
@@ -370,7 +379,7 @@ describe('PATCH /tasks/:id', () => {
     expect((res.body as ErrorResponse).code).toBe('FORBIDDEN');
     const stored = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     expect(stored.title).toBe('Original');
-    expect(await auditRows()).toEqual([]);
+    expect(await streamEvents()).toEqual([]);
   });
 
   it('returns 422 for a non-UUID id', async () => {
@@ -390,9 +399,9 @@ describe('DELETE /tasks/:id', () => {
     expect(res.text).toBe('');
     const after = await api.get(`/tasks/${task.id}`);
     expect(after.status).toBe(404);
-    // The row outlives the task: entityId has no foreign key (ARCH §4).
-    expect(await auditRows()).toEqual([
-      { userId: me.id, action: 'DELETED', entity: 'Task', entityId: task.id },
+    // The payload is the task as it was before the delete (ARCH §9.3).
+    expect(await streamEvents()).toEqual([
+      { action: 'DELETED', taskId: task.id, userId: me.id, payload: asJson(task) },
     ]);
   });
 
@@ -411,13 +420,54 @@ describe('DELETE /tasks/:id', () => {
     expect(res.status).toBe(403);
     expect((res.body as ErrorResponse).code).toBe('FORBIDDEN');
     expect(await prisma.task.findUnique({ where: { id: task.id } })).not.toBeNull();
-    expect(await auditRows()).toEqual([]);
+    expect(await streamEvents()).toEqual([]);
   });
 
   it('returns 422 for a non-UUID id', async () => {
     const res = await api.delete('/tasks/not-a-uuid');
 
     expect(res.status).toBe(422);
+  });
+});
+
+describe('when the event cannot be published (ADR-005)', () => {
+  // Stands in for a Redis outage on XADD, without stopping Redis. The change has already
+  // been written, so the response still succeeds and nothing reaches the stream.
+  beforeEach(() => {
+    jest.spyOn(redis, 'xadd').mockRejectedValueOnce(new Error('Connection is closed.'));
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('still creates the task and returns 201', async () => {
+    const res = await api.post('/tasks').send({ title: 'Unaudited', boardId: board.id });
+
+    expect(res.status).toBe(201);
+    expect(await prisma.task.count()).toBe(1);
+    expect(await streamEvents()).toEqual([]);
+  });
+
+  it('still updates the task and returns 200', async () => {
+    const task = await createTask(board.id);
+
+    const res = await api.patch(`/tasks/${task.id}`).send({ title: 'Renamed' });
+
+    expect(res.status).toBe(200);
+    const stored = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(stored.title).toBe('Renamed');
+    expect(await streamEvents()).toEqual([]);
+  });
+
+  it('still deletes the task and returns 204', async () => {
+    const task = await createTask(board.id);
+
+    const res = await api.delete(`/tasks/${task.id}`);
+
+    expect(res.status).toBe(204);
+    expect(await prisma.task.findUnique({ where: { id: task.id } })).toBeNull();
+    expect(await streamEvents()).toEqual([]);
   });
 });
 

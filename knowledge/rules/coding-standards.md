@@ -96,3 +96,11 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - Pin exact versions (no `^`/`~`), stay on the brief's major versions, and commit lockfiles.
 - New runtime dependencies need a reason in the PR/commit body.
 - After `package.json` changes, recreate the containers with `docker compose [-f docker-compose.test.yml] up -d --build --renew-anon-volumes`. `/app/node_modules` is an anonymous volume, so `--build` alone keeps the old modules ("Cannot find module").
+- The worker's Prisma client comes from `api/prisma/schema.prisma`: run `npm run prisma:generate` in `worker/` after a schema change (the image does it at build). The script copies the schema into the git-ignored `worker/prisma/` first, because Prisma resolves `@prisma/client` from the schema's folder and would otherwise generate into `api/node_modules`.
+
+## Worker and streams (from day-08)
+
+- Parse every Redis Stream reply and entry with Zod. ioredis types `XREADGROUP`, `XAUTOCLAIM` and `XPENDING` replies loosely, and stream fields are untrusted input like a request body.
+- `XACK` only after the handler's write succeeds. A failure leaves the message pending for `XAUTOCLAIM`; never ack on error.
+- The consumer loop must survive Redis: log, pause, retry. A `NOGROUP` error means Redis lost its data, so the loop recreates `audit-group` from `0` (startup still uses `$`, ADR-006).
+- Anything persisted from an error (the DLQ's `error` field) uses Prisma's `errorFormat: 'minimal'`, so no source excerpts end up in Redis or the logs.

@@ -10,3 +10,5 @@
 graphify-out
 docs
 knowledge
+# The worker image copies the schema from api/prisma itself; a stale host copy must not override it.
+worker/prisma

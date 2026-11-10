@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import { globalErrorHandler, notFound } from './errors/AppError';
+import auditLogsRouter from './routes/auditLogs';
 import authRouter from './routes/auth';
 import boardsRouter from './routes/boards';
 import tasksRouter from './routes/tasks';
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use('/auth', authRouter);
 app.use('/boards', boardsRouter);
 app.use('/tasks', tasksRouter);
+app.use('/audit-logs', auditLogsRouter);
 
 app.use(notFound);
 app.use(globalErrorHandler);

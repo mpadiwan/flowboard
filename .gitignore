@@ -2,6 +2,8 @@
 node_modules/
 dist/
 coverage/
+# Copied from api/prisma by `npm run prisma:generate` in worker/ (ADR-001)
+worker/prisma/
 
 # Environment (only the documented template is committed)
 .env

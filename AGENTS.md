@@ -94,7 +94,21 @@ nginx/nginx.conf          /api/* → api:3000 with the prefix stripped
 
 ## Dead-Letter Queue Format
 
-_Filled in with `day-14` (brief §5.6 requires it here). Draft: ARCH §9.3._
+Brief §5.6 requires this here; source: ARCH §9.3 and ADR-006.
+
+- **Key:** `tasks:events:dlq`, a Redis Stream with no TTL. Only the worker writes it.
+- **When:** a `tasks:events` message fails on its `WORKER_MAX_DELIVERIES`-th (3rd) delivery. Delivery 1 is the `XREADGROUP` read; deliveries 2 and 3 are `XAUTOCLAIM` retries after `WORKER_CLAIM_IDLE_MS` idle.
+- **Then:** the worker runs `XADD tasks:events:dlq * …`, then `XACK tasks:events audit-group <originalId>`, so the original leaves the pending list.
+
+| Field                                         | Value                                     |
+| --------------------------------------------- | ----------------------------------------- |
+| `originalId`                                  | the message's stream ID in `tasks:events` |
+| `action`, `taskId`, `userId`, `payload`, `ts` | copied unchanged from the original        |
+| `error`                                       | the last error message                    |
+| `deliveries`                                  | the delivery count at failure (`3`)       |
+| `failedAt`                                    | ISO 8601 timestamp                        |
+
+Inspect it with `docker compose exec redis redis-cli XRANGE tasks:events:dlq - +`.
 
 ## Implemented So Far
 
@@ -107,7 +121,7 @@ Only build on what exists. Tick a line when its milestone commit lands.
 - [x] `week-01 complete` — register/login, `authenticate`, AuditLog on task mutations (sync, in-transaction until `day-08`)
 - [x] `day-06` — Redis client, rate limiter
 - [x] `day-07` — refresh rotation, logout
-- [ ] `day-08` — events, worker consumer, DLQ
+- [x] `day-08` — events, worker consumer, DLQ, `GET /audit-logs`
 - [ ] `day-09` / `week-02 complete` — test suite, ≥80% coverage
 - [ ] `day-11` / `day-12` — helmet, CORS, 10kb limit, ownership, lockout, mass assignment
 - [ ] `day-13` / `day-14` — pino-http, `/health`, `/ready`, DLQ docs
