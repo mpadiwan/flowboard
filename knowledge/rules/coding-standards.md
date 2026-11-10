@@ -85,6 +85,9 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - Protected-route tests authenticate with `request.agent(app).set('Authorization', bearer(user.id))`. `bearer()` signs a token directly, so bcrypt cost 12 stays in `auth.test.ts` only. The 401 cases use a bare `request(app)` and `rejectedAuthHeaders()`.
 - To prove a write is atomic, make its second step fail with `jest.spyOn(module, 'fn').mockRejectedValueOnce(...)` on the imported module namespace, then assert the first write isn't there.
 - Mock only to reach failure branches (Redis throwing, Prisma rejecting) — never to skip real behaviour on the happy path.
+- Every test starts from an empty Redis too (`redis.flushdb()` in `afterEnv.ts`), and `beforeAll` waits for `redis.status === 'ready'`. With `enableOfflineQueue: false`, commands sent while the client is still connecting reject, and the fail-open limiter would let a request through without counting it, so a test could pass for the wrong reason.
+- Rate-limit tests pin the client IP with `X-Forwarded-For` (trust proxy = 1 uses the last entry), so the `rate:auth:{ip}` key is predictable and two IPs can be compared. Send `{}` bodies so allowed requests stop at Zod with a 422 and skip bcrypt.
+- `expect.any()` / `expect.objectContaining()` return `any` and trip `no-unsafe-assignment`. To assert a logger call, read `spy.mock.calls[0]` with an `as unknown as [...]` tuple cast instead.
 
 ## Dependencies
 

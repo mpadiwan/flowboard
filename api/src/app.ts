@@ -9,6 +9,10 @@ import tasksRouter from './routes/tasks';
 // are added with their milestones (day-11, day-13).
 const app: Express = express();
 
+// ADR-002: trust exactly one hop (Nginx), so req.ip is the client address the rate
+// limiter keys on, and extra X-Forwarded-For entries from the client are ignored.
+app.set('trust proxy', 1);
+
 app.use(express.json());
 
 // Feature routers are mounted here at the root (Nginx strips /api, ADR-002).

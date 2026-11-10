@@ -26,6 +26,12 @@ const EnvSchema = z
       .default('15m'),
     // Used for both the refresh JWT expiry and, from day-07, its Redis key TTL.
     JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+    // ADR-005: coerced here, so the port can never silently become NaN.
+    REDIS_HOST: z.string().min(1).default('redis'),
+    REDIS_PORT: z.coerce.number().int().positive().default(6379),
+    // NFR-5: per-IP limit on login and register.
+    RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+    RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
     // Read only by prisma/seed.ts, which refuses to run without it.
     SEED_USER_PASSWORD: z.string().min(8).optional(),
   })

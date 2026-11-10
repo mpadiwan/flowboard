@@ -5,10 +5,12 @@ import { env } from '../config/env';
 import { AppError } from '../errors/AppError';
 import { prisma } from '../lib/prisma';
 import { issueTokenPair } from '../lib/tokens';
+import { rateLimiter } from '../middleware/rateLimiter';
 import { LoginSchema, RegisterSchema } from '../schemas/auth';
 
-// FR-A1 and FR-A2. Public routes; the rate limiter (day-06) and the login lockout
-// (day-12) attach to this router later.
+// FR-A1 and FR-A2. Public routes, rate limited per IP (NFR-5); the login lockout
+// (day-12) attaches here later. The limiter runs before validation, so malformed
+// attempts count too.
 
 // Compared against when the email is unknown, so login takes the same bcrypt time
 // whether or not the account exists (ARCH §8). Hashed once at startup, not on first use,
@@ -63,7 +65,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
 const router: Router = Router();
 
-router.post('/register', register);
-router.post('/login', login);
+router.post('/register', rateLimiter, register);
+router.post('/login', rateLimiter, login);
 
 export default router;
