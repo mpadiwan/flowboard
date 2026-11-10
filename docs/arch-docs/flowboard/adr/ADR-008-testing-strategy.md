@@ -27,10 +27,11 @@ The trainer runs `docker compose -f docker-compose.test.yml exec api npx jest` e
    - **Threshold:** `coverageThreshold: { global: { lines: 80, branches: 80 } }`, so a coverage drop fails the run.
 4. **Supertest** imports `app` from `src/app.ts` and never starts a server. Routes have no prefix (ADR-002).
 5. **Test helpers** live in `tests/helpers/`:
-   - `registerAndLogin()` returns `{ user, accessToken, refreshToken }`.
-   - `createBoard(token)` creates a real board. The handbook's `boardId: 'some-uuid'` example fails UUID validation, so tests need a real board.
+   - `createUser()` inserts a user row directly. `bearer(userId)` signs an access token for it, so route tests skip bcrypt's cost of 12 on every test. `auth.test.ts` goes through the real register and login instead.
+   - `rejectedAuthHeaders(userId)` lists the Authorization headers that must get a 401 (AC-2.6).
+   - `createBoard(ownerId)` creates a real board. The handbook's `boardId: 'some-uuid'` example fails UUID validation, so tests need a real board.
 6. **Required test cases** are listed in the requirements doc, §4. They include register (success and duplicate email), login (success and wrong password), refresh, replay, logout, 403 for another user's task, 413 above 10kb, Helmet headers, mass-assignment stripping, no stack trace in production (`NODE_ENV` stubbed within the test), the rate limiter returning 429, the rate limiter failing open (Redis mocked to throw), lockout, and `/ready` returning 503 (Prisma or Redis mocked to reject).
-7. **Worker tests:** the event-publishing tests assert `XLEN tasks:events` and the fields of the last entry. They don't test the worker. Worker handlers get separate unit tests in `worker/`, with no coverage threshold (OQ-6).
+7. **Worker tests:** the event-publishing tests assert `XLEN tasks:events` and the fields of the last entry. They don't test the worker. Worker handlers and the consumer loop (retries, the DLQ write and XACK order) get separate unit tests in `worker/tests/`, with Redis and Prisma mocked and no coverage threshold (OQ-6). They need no stack, so they run on the host with `npm --prefix worker test`.
 8. **Tests ship with features:** each feature commit includes its tests. Day 6 of the 7-day plan only closes coverage gaps.
 
 ## Consequences

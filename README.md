@@ -74,6 +74,12 @@ docker compose -f docker-compose.test.yml up -d --build   # once; applies migrat
 docker compose -f docker-compose.test.yml exec api npx jest
 ```
 
+The worker's unit tests mock Redis and Prisma, so they need no stack and run on the host. Their coverage is reported but has no threshold (OQ-6).
+
+```bash
+npm --prefix worker test
+```
+
 **Schema changes:** the api applies pending migrations on every start. To create a new one after editing `api/prisma/schema.prisma`:
 
 ```bash

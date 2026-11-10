@@ -41,6 +41,7 @@ api/src/routes/           auth, boards, tasks, auditLogs, health (one file per r
 api/src/schemas/          Zod schemas (+ z.infer types)
 api/tests/                integration tests, one file per route group
 worker/src/               index (bootstrap), consumer loop, handlers/
+worker/tests/             unit tests, Redis + Prisma mocked (npm --prefix worker test)
 nginx/nginx.conf          /api/* → api:3000 with the prefix stripped
 ```
 
@@ -122,7 +123,8 @@ Only build on what exists. Tick a line when its milestone commit lands.
 - [x] `day-06` — Redis client, rate limiter
 - [x] `day-07` — refresh rotation, logout
 - [x] `day-08` — events, worker consumer, DLQ, `GET /audit-logs`
-- [ ] `day-09` / `week-02 complete` — test suite, ≥80% coverage
+- [x] `day-09` — integration tests for every endpoint, worker unit tests
+- [ ] `week-02 complete` — ≥80% coverage verified, Week 1–2 gaps closed
 - [ ] `day-11` / `day-12` — helmet, CORS, 10kb limit, ownership, lockout, mass assignment
 - [ ] `day-13` / `day-14` — pino-http, `/health`, `/ready`, DLQ docs
 - [ ] `week-03 complete` — Security Gate self-review

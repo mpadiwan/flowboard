@@ -37,6 +37,10 @@ beforeEach(async () => {
   api = request.agent(app).set('Authorization', bearer(me.id));
   other = await createUser();
 });
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 describe('authentication (AC-2.6)', () => {
   it.each([
     ['GET', '/boards'],
@@ -89,6 +93,15 @@ describe('GET /boards', () => {
 
     expect(res.status).toBe(200);
     expect((res.body as BoardListResponse).data).toEqual([]);
+  });
+
+  it('returns 500 INTERNAL_ERROR when the query fails', async () => {
+    jest.spyOn(prisma.board, 'findMany').mockRejectedValueOnce(new Error('Connection lost'));
+
+    const res = await api.get('/boards');
+
+    expect(res.status).toBe(500);
+    expect(res.body).toMatchObject({ success: false, code: 'INTERNAL_ERROR' });
   });
 });
 

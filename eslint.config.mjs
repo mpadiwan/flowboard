@@ -13,8 +13,8 @@ export default defineConfig(
     languageOptions: {
       globals: globals.node,
       parserOptions: {
-        // jest.config.ts sits outside every tsconfig, so it gets the default project.
-        projectService: { allowDefaultProject: ['api/jest.config.ts'] },
+        // Each jest.config.ts sits outside every tsconfig, so it gets the default project.
+        projectService: { allowDefaultProject: ['api/jest.config.ts', 'worker/jest.config.ts'] },
         tsconfigRootDir: import.meta.dirname,
       },
     },

@@ -162,6 +162,17 @@ describe('POST /auth/register', () => {
     expect(await prisma.user.count()).toBe(1);
   });
 
+  it('returns 500 INTERNAL_ERROR when the insert fails for any other reason', async () => {
+    jest.spyOn(prisma.user, 'create').mockRejectedValueOnce(new Error('Connection lost'));
+
+    const res = await register();
+
+    expect(res.status).toBe(500);
+    expect(res.body).toMatchObject({ success: false, code: 'INTERNAL_ERROR' });
+    expect(await prisma.user.count()).toBe(0);
+    expect(await redis.keys('refresh:*')).toEqual([]);
+  });
+
   it.each([
     ['a missing email', { password: PASSWORD }, 'email'],
     ['an invalid email', { email: 'not-an-email', password: PASSWORD }, 'email'],
