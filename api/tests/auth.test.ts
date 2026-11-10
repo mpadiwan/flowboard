@@ -1,15 +1,55 @@
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import request from 'supertest';
 import app from '../src/app';
 import { env } from '../src/config/env';
 import { prisma } from '../src/lib/prisma';
+import { redis } from '../src/lib/redis';
+import { issueTokenPair, signAccessToken } from '../src/lib/tokens';
+import { createUser } from './helpers/factories';
 
-// FR-A1, FR-A2, AC-2.1, AC-2.2. These go through the real bcrypt cost, so they register
-// only the users they need. Refresh, logout and lockout join with day-07 and day-12.
+// FR-A1 to FR-A4, AC-2.1 to AC-2.5, AC-5.2. Register and login go through the real bcrypt
+// cost, so they register only the users they need; refresh and logout take a stored pair
+// straight from issueTokenPair. Lockout joins with day-12.
 
 const EMAIL = 'ada@flowboard.test';
 const PASSWORD = 'correct horse battery';
+
+// Signature and claim checks run before any Redis lookup, so the user needn't exist.
+const STRANGER = randomUUID();
+const INVALID_REFRESH_TOKENS: [string, string][] = [
+  [
+    'an expired token',
+    jwt.sign({ sub: STRANGER, jti: randomUUID() }, env.JWT_REFRESH_SECRET, { expiresIn: -10 }),
+  ],
+  [
+    'a token signed with another secret',
+    jwt.sign({ sub: STRANGER, jti: randomUUID() }, 'x'.repeat(32)),
+  ],
+  ['an access token (ADR-004)', signAccessToken(STRANGER)],
+  ['a token with no jti', jwt.sign({ sub: STRANGER }, env.JWT_REFRESH_SECRET)],
+  ['a malformed token', 'not-a-jwt'],
+];
+
+const INVALID_REFRESH_BODIES: [string, object][] = [
+  ['a missing refreshToken', {}],
+  ['an empty refreshToken', { refreshToken: '' }],
+  ['a non-string refreshToken', { refreshToken: 42 }],
+];
+
+const INVALID_REFRESH_TOKEN_BODY = {
+  success: false,
+  message: 'Invalid or expired refresh token',
+  code: 'INVALID_REFRESH_TOKEN',
+};
+
+// Matched, not equalled: outside production every 5xx body also carries `stack` (NFR-7).
+const SERVICE_UNAVAILABLE_BODY = {
+  success: false,
+  message: 'Service unavailable',
+  code: 'SERVICE_UNAVAILABLE',
+};
 
 interface ErrorResponse {
   success: false;
@@ -40,9 +80,38 @@ function decode(token: string): JwtPayload {
   return payload;
 }
 
+// The Redis key a refresh token was stored under (ARCH §9.2).
+function keyOf(refreshToken: string): string {
+  const { sub, jti } = decode(refreshToken);
+  return `refresh:${String(sub)}:${String(jti)}`;
+}
+
+async function expectStoredForSevenDays(refreshToken: string): Promise<void> {
+  const ttl = await redis.ttl(keyOf(refreshToken));
+  expect(ttl).toBeGreaterThan(env.JWT_REFRESH_TTL_SECONDS - 10);
+  expect(ttl).toBeLessThanOrEqual(env.JWT_REFRESH_TTL_SECONDS);
+}
+
+// Stands in for a Redis outage on one command, without stopping Redis.
+function failNext(command: 'set' | 'del'): void {
+  jest.spyOn(redis, command).mockRejectedValueOnce(new Error('Connection is closed.'));
+}
+
 async function register(email = EMAIL, password = PASSWORD): Promise<request.Response> {
   return request(app).post('/auth/register').send({ email, password });
 }
+
+async function postRefresh(body: object): Promise<request.Response> {
+  return request(app).post('/auth/refresh').send(body);
+}
+
+async function postLogout(body: object): Promise<request.Response> {
+  return request(app).post('/auth/logout').send(body);
+}
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe('POST /auth/register', () => {
   it('returns 201 with the user and a token pair, never the password', async () => {
@@ -161,6 +230,21 @@ describe('POST /auth/login', () => {
     expect(jti(first)).not.toBe(jti(second));
   });
 
+  it('stores the refresh token id in Redis with a 7-day TTL (AC-5.2)', async () => {
+    const res = await request(app).post('/auth/login').send({ email: EMAIL, password: PASSWORD });
+
+    await expectStoredForSevenDays((res.body as LoginResponse).data.refreshToken);
+  });
+
+  it('returns 503 SERVICE_UNAVAILABLE when the refresh token cannot be stored (ADR-005)', async () => {
+    failNext('set');
+
+    const res = await request(app).post('/auth/login').send({ email: EMAIL, password: PASSWORD });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject(SERVICE_UNAVAILABLE_BODY);
+  });
+
   it('returns 401 INVALID_CREDENTIALS for a wrong password (AC-2.2)', async () => {
     const res = await request(app)
       .post('/auth/login')
@@ -195,5 +279,145 @@ describe('POST /auth/login', () => {
 
     expect(res.status).toBe(422);
     expect((res.body as ErrorResponse).details?.[0]?.path).toBe(path);
+  });
+});
+
+describe('POST /auth/refresh', () => {
+  let userId: string;
+
+  beforeEach(async () => {
+    userId = (await createUser()).id;
+  });
+
+  it('returns 200 with a new pair and rotates the Redis key (AC-2.3)', async () => {
+    const old = await issueTokenPair(userId);
+
+    const res = await postRefresh({ refreshToken: old.refreshToken });
+
+    expect(res.status).toBe(200);
+    const { data } = res.body as LoginResponse;
+    expect(Object.keys(data).sort()).toEqual(['accessToken', 'refreshToken']);
+    expect(decode(data.refreshToken).sub).toBe(userId);
+    expect(decode(data.refreshToken).jti).not.toBe(decode(old.refreshToken).jti);
+    expect(await redis.exists(keyOf(old.refreshToken))).toBe(0);
+    await expectStoredForSevenDays(data.refreshToken);
+  });
+
+  it('issues an access token that opens protected routes', async () => {
+    const res = await postRefresh({ refreshToken: (await issueTokenPair(userId)).refreshToken });
+    const { accessToken } = (res.body as LoginResponse).data;
+
+    const boards = await request(app).get('/boards').set('Authorization', `Bearer ${accessToken}`);
+
+    expect(boards.status).toBe(200);
+  });
+
+  it('returns 401 INVALID_REFRESH_TOKEN when a used token is replayed (AC-2.4)', async () => {
+    const { refreshToken } = await issueTokenPair(userId);
+    await postRefresh({ refreshToken });
+
+    const res = await postRefresh({ refreshToken });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual(INVALID_REFRESH_TOKEN_BODY);
+  });
+
+  it('lets only one of two concurrent refreshes with the same token succeed', async () => {
+    const { refreshToken } = await issueTokenPair(userId);
+
+    const results = await Promise.all([
+      postRefresh({ refreshToken }),
+      postRefresh({ refreshToken }),
+    ]);
+
+    expect(results.map((res) => res.status).sort()).toEqual([200, 401]);
+  });
+
+  it.each(INVALID_REFRESH_TOKENS)(
+    'returns 401 INVALID_REFRESH_TOKEN for %s',
+    async (_label, token) => {
+      const res = await postRefresh({ refreshToken: token });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual(INVALID_REFRESH_TOKEN_BODY);
+    },
+  );
+
+  it.each(INVALID_REFRESH_BODIES)('returns 422 for %s', async (_label, body) => {
+    const res = await postRefresh(body);
+
+    expect(res.status).toBe(422);
+    expect((res.body as ErrorResponse).details?.[0]?.path).toBe('refreshToken');
+  });
+
+  it('returns 503 SERVICE_UNAVAILABLE when Redis is down, and keeps the token (ADR-005)', async () => {
+    const { refreshToken } = await issueTokenPair(userId);
+    failNext('del');
+
+    const res = await postRefresh({ refreshToken });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject(SERVICE_UNAVAILABLE_BODY);
+    expect(await redis.exists(keyOf(refreshToken))).toBe(1);
+  });
+});
+
+describe('POST /auth/logout', () => {
+  let refreshToken: string;
+
+  beforeEach(async () => {
+    ({ refreshToken } = await issueTokenPair((await createUser()).id));
+  });
+
+  it('returns 204 with no body and deletes the Redis key (AC-2.5)', async () => {
+    const res = await postLogout({ refreshToken });
+
+    expect(res.status).toBe(204);
+    expect(res.text).toBe('');
+    expect(await redis.exists(keyOf(refreshToken))).toBe(0);
+  });
+
+  it('makes the token unusable for refresh afterwards (AC-2.5)', async () => {
+    await postLogout({ refreshToken });
+
+    const res = await postRefresh({ refreshToken });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual(INVALID_REFRESH_TOKEN_BODY);
+  });
+
+  it('returns 204 again for a token that was already revoked', async () => {
+    await postLogout({ refreshToken });
+
+    const res = await postLogout({ refreshToken });
+
+    expect(res.status).toBe(204);
+  });
+
+  it.each(INVALID_REFRESH_TOKENS)(
+    'returns 401 INVALID_REFRESH_TOKEN for %s',
+    async (_label, token) => {
+      const res = await postLogout({ refreshToken: token });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual(INVALID_REFRESH_TOKEN_BODY);
+    },
+  );
+
+  it.each(INVALID_REFRESH_BODIES)('returns 422 for %s', async (_label, body) => {
+    const res = await postLogout(body);
+
+    expect(res.status).toBe(422);
+    expect((res.body as ErrorResponse).details?.[0]?.path).toBe('refreshToken');
+  });
+
+  it('returns 503 SERVICE_UNAVAILABLE when Redis is down (ADR-005)', async () => {
+    failNext('del');
+
+    const res = await postLogout({ refreshToken });
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject(SERVICE_UNAVAILABLE_BODY);
+    expect(await redis.exists(keyOf(refreshToken))).toBe(1);
   });
 });

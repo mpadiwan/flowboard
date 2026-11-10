@@ -25,5 +25,12 @@ export const LoginSchema = z.object({
   password: z.string().min(1).refine(withinBcryptLimit, BCRYPT_LIMIT_MESSAGE),
 });
 
+// Refresh and logout take the same body. Signature and expiry are checked by
+// verifyRefresh, not here, so a bad token gets 401 rather than 422.
+export const RefreshTokenSchema = z.object({
+  refreshToken: z.string().min(1),
+});
+
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
+export type RefreshTokenInput = z.infer<typeof RefreshTokenSchema>;

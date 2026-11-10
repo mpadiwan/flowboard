@@ -106,7 +106,7 @@ Only build on what exists. Tick a line when its milestone commit lands.
 - [x] `day-04` — boards CRUD, full route layer
 - [x] `week-01 complete` — register/login, `authenticate`, AuditLog on task mutations (sync, in-transaction until `day-08`)
 - [x] `day-06` — Redis client, rate limiter
-- [ ] `day-07` — refresh rotation, logout
+- [x] `day-07` — refresh rotation, logout
 - [ ] `day-08` — events, worker consumer, DLQ
 - [ ] `day-09` / `week-02 complete` — test suite, ≥80% coverage
 - [ ] `day-11` / `day-12` — helmet, CORS, 10kb limit, ownership, lockout, mass assignment

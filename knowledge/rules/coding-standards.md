@@ -87,6 +87,8 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - Mock only to reach failure branches (Redis throwing, Prisma rejecting) — never to skip real behaviour on the happy path.
 - Every test starts from an empty Redis too (`redis.flushdb()` in `afterEnv.ts`), and `beforeAll` waits for `redis.status === 'ready'`. With `enableOfflineQueue: false`, commands sent while the client is still connecting reject, and the fail-open limiter would let a request through without counting it, so a test could pass for the wrong reason.
 - Rate-limit tests pin the client IP with `X-Forwarded-For` (trust proxy = 1 uses the last entry), so the `rate:auth:{ip}` key is predictable and two IPs can be compared. Send `{}` bodies so allowed requests stop at Zod with a 422 and skip bcrypt.
+- Assert 4xx bodies with `toEqual`, but 5xx bodies with `toMatchObject`: outside production `globalErrorHandler` adds `stack` to every 5xx body (NFR-7), so `toEqual` fails in the test stack.
+- Refresh and logout tests take a stored pair from `issueTokenPair(user.id)` after `createUser()`, not from register/login, so only the tests about those two routes pay bcrypt cost 12. To reach a fail-closed branch, `jest.spyOn(redis, 'set' | 'del').mockRejectedValueOnce(...)`, then assert the key is untouched.
 - `expect.any()` / `expect.objectContaining()` return `any` and trip `no-unsafe-assignment`. To assert a logger call, read `spy.mock.calls[0]` with an `as unknown as [...]` tuple cast instead.
 
 ## Dependencies

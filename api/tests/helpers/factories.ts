@@ -3,7 +3,7 @@ import type { Board, User } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { env } from '../../src/config/env';
 import { prisma } from '../../src/lib/prisma';
-import { issueTokenPair } from '../../src/lib/tokens';
+import { signAccessToken, signRefreshToken } from '../../src/lib/tokens';
 
 // Rows are inserted directly; the password is a placeholder, never a real hash.
 // Tests need a real boardId: a made-up UUID fails the board lookup with 404.
@@ -15,12 +15,12 @@ export async function createUser(email = `user-${randomUUID()}@flowboard.test`):
 // A valid Authorization header for the user, signed directly so route tests skip the
 // bcrypt cost of register/login (auth.test.ts covers those).
 export function bearer(userId: string): string {
-  return `Bearer ${issueTokenPair(userId).accessToken}`;
+  return `Bearer ${signAccessToken(userId)}`;
 }
 
 // Authorization headers that authenticate must reject with 401 (AC-2.6), as [label, header].
 export function rejectedAuthHeaders(userId: string): [string, string][] {
-  const { refreshToken } = issueTokenPair(userId);
+  const refreshToken = signRefreshToken(userId, randomUUID());
   return [
     ['a non-Bearer scheme', `Basic ${Buffer.from('a:b').toString('base64')}`],
     ['a Bearer header with no token', 'Bearer '],

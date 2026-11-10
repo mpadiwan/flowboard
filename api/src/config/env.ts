@@ -24,7 +24,7 @@ const EnvSchema = z
       .string()
       .refine(isJwtDuration, 'Must be a duration such as 15m')
       .default('15m'),
-    // Used for both the refresh JWT expiry and, from day-07, its Redis key TTL.
+    // Used for both the refresh JWT expiry and its Redis key TTL.
     JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
     // ADR-005: coerced here, so the port can never silently become NaN.
     REDIS_HOST: z.string().min(1).default('redis'),
