@@ -1,9 +1,10 @@
-import pino, { type Logger } from 'pino';
+import pino, { type Logger, type LoggerOptions } from 'pino';
 import { env } from '../config/env';
 
 // Structured JSON logging from day one, so there is never a console.log to replace.
-// Request logging (pino-http with request IDs) is added with day-13 (ARCH §10).
-export const logger: Logger = pino({
+// Exported without the transport so tests can build the same logger on a captured stream.
+// pino-http's per-request child loggers inherit this redaction (ARCH §10).
+export const loggerOptions: LoggerOptions = {
   level: env.LOG_LEVEL,
   redact: {
     paths: [
@@ -17,5 +18,9 @@ export const logger: Logger = pino({
     ],
     censor: '[REDACTED]',
   },
+};
+
+export const logger: Logger = pino({
+  ...loggerOptions,
   ...(env.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : {}),
 });

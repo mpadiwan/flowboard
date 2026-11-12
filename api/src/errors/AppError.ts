@@ -133,13 +133,17 @@ export function globalErrorHandler(
   const { statusCode, body } = toHttpError(err);
 
   if (statusCode >= 500) {
-    logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled error');
+    // reqId ties this stack-carrying line to pino-http's access line for the same request.
+    logger.error(
+      { err, reqId: req.id, method: req.method, url: req.originalUrl },
+      'Unhandled error',
+    );
     if (env.NODE_ENV !== 'production' && err instanceof Error) {
       body.stack = err.stack;
     }
   } else {
     logger.debug(
-      { code: body.code, statusCode, method: req.method, url: req.originalUrl },
+      { code: body.code, statusCode, reqId: req.id, method: req.method, url: req.originalUrl },
       body.message,
     );
   }

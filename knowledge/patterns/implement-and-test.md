@@ -17,6 +17,7 @@ How every FlowBoard feature goes from idea to milestone commit. It is the handbo
 - **Verify asks the hostile question.** For every change, ask what happens when Redis is down, when the caller doesn't own the resource, when the body has extra fields, and when the token is replayed.
 - **Write down the why.** If a decision isn't already in an ADR, add one, or add a line to an existing ADR, before committing. The Security Gate asks "why", not "what".
 - **Keep the context current.** When a milestone lands, tick it under "Implemented So Far" in AGENTS.md.
+- **New dependency, three installs.** The api keeps `node_modules` in an anonymous volume, so after `npm --prefix api install --save-exact <pkg>` also run `npm install` inside the dev and test api containers, then restore the host `package-lock.json` (the container's npm rewrites the darwin-only `fsevents` entry).
 
 ## Example: `day-02` task routes
 
