@@ -1,6 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { getOwnedBoard } from '../lib/ownership';
+import { getOwnedBoard, rethrowGone } from '../lib/ownership';
 import { requireUserId } from '../lib/requestUser';
 import { authenticate } from '../middleware/authenticate';
 import { CreateBoardSchema } from '../schemas/board';
@@ -65,7 +65,9 @@ export const deleteBoard = async (
     const { id } = IdParamSchema.parse(req.params);
     await getOwnedBoard(id, userId);
     // The board's tasks go with it (onDelete: Cascade). Not audited per task (OQ-7).
-    await prisma.board.delete({ where: { id } });
+    await prisma.board
+      .delete({ where: { id } })
+      .catch(rethrowGone('Board not found', 'BOARD_NOT_FOUND'));
     res.status(204).end();
   } catch (err) {
     next(err);

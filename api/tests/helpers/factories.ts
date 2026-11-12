@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Board, User } from '@prisma/client';
+import { Prisma, type Board, type User } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { env } from '../../src/config/env';
 import { prisma } from '../../src/lib/prisma';
@@ -37,4 +37,12 @@ export function rejectedAuthHeaders(userId: string): [string, string][] {
 
 export async function createBoard(ownerId: string, name = 'Test board'): Promise<Board> {
   return prisma.board.create({ data: { name, ownerId } });
+}
+
+// A Prisma error with the given code, e.g. P2025 for a row deleted under a write.
+export function prismaError(code: string): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError('Prisma failure', {
+    code,
+    clientVersion: Prisma.prismaVersion.client,
+  });
 }

@@ -1,9 +1,11 @@
+import type { Request, Response } from 'express';
 import type { ChainableCommander } from 'ioredis';
 import request from 'supertest';
 import app from '../src/app';
 import { env } from '../src/config/env';
 import { logger } from '../src/lib/logger';
 import { redis } from '../src/lib/redis';
+import { rateLimiter } from '../src/middleware/rateLimiter';
 
 // NFR-5, AC-4.4, AC-5.1, AC-5.4. Bodies are empty, so every allowed request stops at
 // Zod with a 422 and never pays the bcrypt cost. X-Forwarded-For pins the client IP
@@ -111,5 +113,16 @@ describe('rateLimiter', () => {
 
     expect(res.status).toBe(422);
     expect(res.headers['ratelimit-limit']).toBeUndefined();
+  });
+
+  // Called directly: Supertest always sets a socket address, so req.ip is never undefined over HTTP.
+  it('counts a request with no client IP in the shared rate:auth:unknown bucket', async () => {
+    const res = { setHeader: jest.fn() } as unknown as Response;
+    const next = jest.fn();
+
+    await rateLimiter({ ip: undefined } as Request, res, next);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(await redis.get('rate:auth:unknown')).toBe('1');
   });
 });

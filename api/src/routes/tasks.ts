@@ -1,7 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { publishTaskEvent } from '../lib/events';
 import { prisma } from '../lib/prisma';
-import { getOwnedBoard, getOwnedTask } from '../lib/ownership';
+import { getOwnedBoard, getOwnedTask, rethrowGone } from '../lib/ownership';
 import { requireUserId } from '../lib/requestUser';
 import { authenticate } from '../middleware/authenticate';
 import { IdParamSchema } from '../schemas/common';
@@ -80,15 +80,17 @@ export const updateTask = async (
     await getOwnedTask(id, userId);
 
     // Prisma skips undefined fields; a null description clears it.
-    const task = await prisma.task.update({
-      where: { id },
-      data: {
-        title: input.title,
-        description: input.description,
-        priority: input.priority,
-        status: input.status,
-      },
-    });
+    const task = await prisma.task
+      .update({
+        where: { id },
+        data: {
+          title: input.title,
+          description: input.description,
+          priority: input.priority,
+          status: input.status,
+        },
+      })
+      .catch(rethrowGone('Task not found', 'TASK_NOT_FOUND'));
     await publishTaskEvent({ action: 'UPDATED', taskId: task.id, userId, payload: task });
     res.json({ success: true, data: task });
   } catch (err) {
@@ -106,7 +108,9 @@ export const deleteTask = async (
     const { id } = IdParamSchema.parse(req.params);
     // The ownership check's result doubles as the snapshot the DELETED event carries.
     const task = await getOwnedTask(id, userId);
-    await prisma.task.delete({ where: { id } });
+    await prisma.task
+      .delete({ where: { id } })
+      .catch(rethrowGone('Task not found', 'TASK_NOT_FOUND'));
     await publishTaskEvent({ action: 'DELETED', taskId: id, userId, payload: task });
     res.status(204).end();
   } catch (err) {

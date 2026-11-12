@@ -231,6 +231,8 @@ This is the walkthrough the Security Gate asks for:
 
 - **Refresh tokens and fail-closed Redis** (day-07): `verifyRefresh` turns every `jsonwebtoken` error into `AppError 401 INVALID_REFRESH_TOKEN` (FR-A3), so the generic `UNAUTHORIZED` row applies only to access tokens. When Redis rejects on a fail-closed path (issuing a pair at register, login or refresh; the `DEL` at refresh or logout), `src/lib/tokens.ts` throws `AppError 503 SERVICE_UNAVAILABLE`. That is the same code Nginx's `@api_unavailable` page uses ([ADR-005](adr/ADR-005-redis-failure-policy.md)).
 
+- **Check-then-write races** (week-02): a task or board deleted between its ownership check and the write makes Prisma throw P2025. The three write sites (PATCH and DELETE `/tasks/:id`, DELETE `/boards/:id`) catch it with `rethrowGone` from `src/lib/ownership.ts`, so the response is `404 TASK_NOT_FOUND` or `404 BOARD_NOT_FOUND` and no event is published. The generic `NOT_FOUND` row is only a fallback.
+
 - **Unknown routes:** a final `notFound` middleware turns any unmatched route into `404 ROUTE_NOT_FOUND`.
 - **Production:** when `NODE_ENV=production`, responses never contain `stack` and 500 errors use the generic message "Internal server error". The full error, with its stack, is always logged server-side.
 

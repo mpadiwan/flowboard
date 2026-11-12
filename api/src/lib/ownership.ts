@@ -1,4 +1,4 @@
-import type { Board, Task } from '@prisma/client';
+import { Prisma, type Board, type Task } from '@prisma/client';
 import { AppError } from '../errors/AppError';
 import { prisma } from './prisma';
 
@@ -30,4 +30,16 @@ export async function getOwnedTask(id: string, userId: string): Promise<Task> {
   // The board join is only for the check; the response keeps the plain Task shape.
   const { board: _board, ...task } = found;
   return task;
+}
+
+// For the write that follows a check: a concurrent delete in between makes Prisma throw
+// P2025, so report it with the resource's own 404 code instead of the generic NOT_FOUND.
+// Use as `.catch(rethrowGone(...))`; any other error is rethrown unchanged.
+export function rethrowGone(message: string, code: string): (err: unknown) => never {
+  return (err: unknown): never => {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new AppError(message, 404, code);
+    }
+    throw err;
+  };
 }

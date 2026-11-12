@@ -4,7 +4,13 @@ import app from '../src/app';
 import { TASK_EVENTS_STREAM } from '../src/lib/events';
 import { prisma } from '../src/lib/prisma';
 import { redis } from '../src/lib/redis';
-import { bearer, createBoard, createUser, rejectedAuthHeaders } from './helpers/factories';
+import {
+  bearer,
+  createBoard,
+  createUser,
+  prismaError,
+  rejectedAuthHeaders,
+} from './helpers/factories';
 
 // FR-T1 to FR-T5, AC-2.6, AC-2.7, AC-3.1 to AC-3.5 and AC-5.3. `api` sends the caller's
 // Bearer token on every request; the 401 cases use a bare request(app).
@@ -467,6 +473,47 @@ describe('when the event cannot be published (ADR-005)', () => {
 
     expect(res.status).toBe(204);
     expect(await prisma.task.findUnique({ where: { id: task.id } })).toBeNull();
+    expect(await streamEvents()).toEqual([]);
+  });
+});
+
+describe('when the task is deleted between the ownership check and the write', () => {
+  // Stands in for a concurrent delete: getOwnedTask finds the task, then Prisma reports
+  // the row gone (P2025). The response keeps the task's own 404 code and nothing is published.
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('returns 404 TASK_NOT_FOUND from PATCH', async () => {
+    const task = await createTask(board.id);
+    jest.spyOn(prisma.task, 'update').mockRejectedValueOnce(prismaError('P2025'));
+
+    const res = await api.patch(`/tasks/${task.id}`).send({ title: 'Renamed' });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ success: false, code: 'TASK_NOT_FOUND' });
+    expect(await streamEvents()).toEqual([]);
+  });
+
+  it('returns 404 TASK_NOT_FOUND from DELETE', async () => {
+    const task = await createTask(board.id);
+    jest.spyOn(prisma.task, 'delete').mockRejectedValueOnce(prismaError('P2025'));
+
+    const res = await api.delete(`/tasks/${task.id}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ success: false, code: 'TASK_NOT_FOUND' });
+    expect(await streamEvents()).toEqual([]);
+  });
+
+  it('still returns 500 for any other write failure', async () => {
+    const task = await createTask(board.id);
+    jest.spyOn(prisma.task, 'update').mockRejectedValueOnce(new Error('Connection lost'));
+
+    const res = await api.patch(`/tasks/${task.id}`).send({ title: 'Renamed' });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toMatchObject({ success: false, code: 'INTERNAL_ERROR' });
     expect(await streamEvents()).toEqual([]);
   });
 });

@@ -68,6 +68,11 @@ services:
 
   redis:
     image: redis:7
+    # AOF on a named volume: the event stream, audit-group and refresh keys survive a
+    # container recreate. The test stack keeps an ephemeral Redis.
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -77,3 +82,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:

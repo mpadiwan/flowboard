@@ -181,6 +181,29 @@ describe('retries (XAUTOCLAIM)', () => {
     expect(callOrder(commands.xadd)).toBeLessThan(callOrder(commands.xack));
   });
 
+  it('records a non-Error failure as its string form in the DLQ entry', async () => {
+    const fields = toFields({ ...taskEvent() });
+    commands.xautoclaim.mockResolvedValueOnce(claimed(fields));
+    create.mockRejectedValueOnce('connection reset');
+    commands.xpending.mockResolvedValue(pending(3));
+
+    await runConsumer(stopAfter(1));
+
+    const xaddArgs = commands.xadd.mock.calls[0] as string[];
+    expect(xaddArgs[xaddArgs.indexOf('error') + 1]).toBe('connection reset');
+  });
+
+  it('leaves a failed message pending when XPENDING no longer lists it', async () => {
+    commands.xautoclaim.mockResolvedValueOnce(claimed(toFields({ ...taskEvent() })));
+    create.mockRejectedValueOnce(new Error('Foreign key constraint failed'));
+    commands.xpending.mockResolvedValue([]);
+
+    await runConsumer(stopAfter(1));
+
+    expect(commands.xadd).not.toHaveBeenCalled();
+    expect(commands.xack).not.toHaveBeenCalled();
+  });
+
   it('XACKs entries trimmed from the stream so XPENDING drains', async () => {
     commands.xautoclaim.mockResolvedValueOnce(['0-0', [], ['1-0', '2-0']]);
 

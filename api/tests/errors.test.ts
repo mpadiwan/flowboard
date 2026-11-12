@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { JsonWebTokenError, NotBeforeError, TokenExpiredError } from 'jsonwebtoken';
 import request from 'supertest';
@@ -6,6 +5,7 @@ import { z } from 'zod';
 import app from '../src/app';
 import { env } from '../src/config/env';
 import { AppError, globalErrorHandler, isAppError } from '../src/errors/AppError';
+import { prismaError } from './helpers/factories';
 
 // The globalErrorHandler mapping table (ARCH §7). Each case throws one error type
 // from a throwaway route and checks the response shape.
@@ -25,13 +25,6 @@ function appThrowing(err: unknown): Express {
   });
   testApp.use(globalErrorHandler);
   return testApp;
-}
-
-function prismaError(code: string): Prisma.PrismaClientKnownRequestError {
-  return new Prisma.PrismaClientKnownRequestError('Prisma failure', {
-    code,
-    clientVersion: Prisma.prismaVersion.client,
-  });
 }
 
 describe('globalErrorHandler', () => {

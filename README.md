@@ -43,8 +43,8 @@ curl -i http://localhost/api/does-not-exist
 docker compose logs -f api            # follow api logs
 docker compose exec db psql -U flowboard flowboard
 docker compose exec redis redis-cli
-docker compose down                   # stop (keeps the database volume)
-docker compose down -v                # stop and delete the database volume
+docker compose down                   # stop (keeps the database and Redis volumes)
+docker compose down -v                # stop and delete the database and Redis volumes
 ```
 
 **After changing dependencies**, rebuild and refresh the `node_modules` volumes. Otherwise the containers keep their old modules.
@@ -79,6 +79,10 @@ The worker's unit tests mock Redis and Prisma, so they need no stack and run on 
 ```bash
 npm --prefix worker test
 ```
+
+Husky also runs them before every `git push`.
+
+**Edits not picked up:** on macOS, `tsx watch` in the api container doesn't always see edits made through the bind mount. If a change doesn't show up, run `docker compose restart api`.
 
 **Schema changes:** the api applies pending migrations on every start. To create a new one after editing `api/prisma/schema.prisma`:
 

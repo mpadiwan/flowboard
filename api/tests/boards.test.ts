@@ -2,7 +2,13 @@ import type { Board, User } from '@prisma/client';
 import request from 'supertest';
 import app from '../src/app';
 import { prisma } from '../src/lib/prisma';
-import { bearer, createBoard, createUser, rejectedAuthHeaders } from './helpers/factories';
+import {
+  bearer,
+  createBoard,
+  createUser,
+  prismaError,
+  rejectedAuthHeaders,
+} from './helpers/factories';
 
 // FR-B1 to FR-B4, AC-2.6, AC-2.7, AC-3.2, AC-3.5. `api` sends the caller's Bearer token
 // on every request; the 401 cases use a bare request(app).
@@ -221,6 +227,17 @@ describe('DELETE /boards/:id', () => {
 
     expect(res.status).toBe(404);
     expect((res.body as ErrorResponse).code).toBe('BOARD_NOT_FOUND');
+  });
+
+  // A concurrent delete between getOwnedBoard and the write: Prisma reports P2025.
+  it('returns 404 BOARD_NOT_FOUND when the board is deleted after the ownership check', async () => {
+    const board = await createBoard(me.id);
+    jest.spyOn(prisma.board, 'delete').mockRejectedValueOnce(prismaError('P2025'));
+
+    const res = await api.delete(`/boards/${board.id}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toMatchObject({ success: false, code: 'BOARD_NOT_FOUND' });
   });
 
   it('returns 422 for a non-UUID id', async () => {

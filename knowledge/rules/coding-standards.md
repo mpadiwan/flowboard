@@ -45,6 +45,7 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - Success responses always use `{ success: true, data }`; `DELETE` returns `res.status(204).end()`.
 - Throw `AppError` for expected failures; let unexpected errors propagate to `next(err)`.
 - Ownership: load, then check — 404 if missing, 403 if not the caller's (ADR-003). Use `getOwnedBoard` / `getOwnedTask` from `lib/ownership.ts`; don't re-implement the check in a handler.
+- A write after an ownership check ends in `.catch(rethrowGone('Task not found', 'TASK_NOT_FOUND'))` (or the board equivalent). A concurrent delete in between gives P2025, and this keeps the resource's own 404 code instead of the generic `NOT_FOUND`.
 - `req.user` is optional in the type (`types/express.d.ts`). Read it only through `requireUserId(req)`, never `req.user!.id`.
 
 ## Middleware
@@ -94,6 +95,7 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - `expect.stringMatching()` returns `any`; cast it (`as string`) where it's a spread argument, or `no-unsafe-argument` fails lint.
 - Refresh and logout tests take a stored pair from `issueTokenPair(user.id)` after `createUser()`, not from register/login, so only the tests about those two routes pay bcrypt cost 12. To reach a fail-closed branch, `jest.spyOn(redis, 'set' | 'del').mockRejectedValueOnce(...)`, then assert the key is untouched.
 - `expect.any()` / `expect.objectContaining()` return `any` and trip `no-unsafe-assignment`. To assert a logger call, read `spy.mock.calls[0]` with an `as unknown as [...]` tuple cast instead.
+- To test code that runs at import (`config/env.ts`), load a fresh copy with `jest.requireActual(path)` inside `jest.isolateModules`. `require()` fails `no-require-imports`, and ts-jest leaves `import()` as a real dynamic import that Jest rejects without `--experimental-vm-modules`. Swap env with `jest.replaceProperty(process, 'env', …)` and restore it in a `finally`; stub `process.exit` to throw.
 
 ## Dependencies
 
