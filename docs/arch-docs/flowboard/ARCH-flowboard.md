@@ -276,6 +276,8 @@ new Redis({
 | `tasks:events`           | stream           | none                              | api `XADD` / worker `XREADGROUP` | Task events. Consumer group `audit-group`.                                                             |
 | `tasks:events:dlq`       | stream           | none                              | worker                           | Dead-letter queue (§9.3).                                                                              |
 
+**Login lockout** (day-12, `src/middleware/loginLockout.ts`) runs after the rate limiter and before the login handler. The key is the email after `LoginSchema` normalisation (trimmed, lower-cased), and unknown emails count too, so the lockout behaves the same whether or not the account exists. Attempts while the lock exists are rejected before the handler, so they neither add to `login:fail` nor extend the lock. The fail counter's TTL starts at the first failure, so the 5 failures must fall within one 15-minute window. Trade-off: anyone can lock any email for 15 minutes; accepted, as brief §5 asks for lockout or heavy throttle.
+
 **Rate limiting is fail-open.** If any rate-limit or lockout command throws, the middleware logs at `warn` and calls `next()`. Only a 429 that the middleware decided itself is sent through `next(err)`.
 
 ### 9.3 Event and DLQ format

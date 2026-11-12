@@ -125,7 +125,7 @@ Only build on what exists. Tick a line when its milestone commit lands.
 - [x] `day-08` — events, worker consumer, DLQ, `GET /audit-logs`
 - [x] `day-09` — integration tests for every endpoint, worker unit tests
 - [x] `week-02 complete` — ≥80% coverage verified, Week 1–2 gaps closed
-- [ ] `day-11` / `day-12` — helmet, CORS, 10kb limit, ownership, lockout, mass assignment
+- [x] `day-11` / `day-12` — helmet, CORS, 10kb limit, ownership, lockout, mass assignment
 - [ ] `day-13` / `day-14` — pino-http, `/health`, `/ready`, DLQ docs
 - [ ] `week-03 complete` — Security Gate self-review
 

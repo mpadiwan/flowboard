@@ -5,12 +5,13 @@ import { env } from '../config/env';
 import { AppError } from '../errors/AppError';
 import { prisma } from '../lib/prisma';
 import { consumeRefresh, invalidRefreshToken, issueTokenPair, verifyRefresh } from '../lib/tokens';
+import { clearLoginFailures, loginLockout, recordLoginFailure } from '../middleware/loginLockout';
 import { rateLimiter } from '../middleware/rateLimiter';
 import { LoginSchema, RefreshTokenSchema, RegisterSchema } from '../schemas/auth';
 
-// FR-A1 to FR-A4. Public routes. Register and login are rate limited per IP (NFR-5);
-// the login lockout (day-12) attaches here later. The limiter runs before validation,
-// so malformed attempts count too. Refresh and logout are not rate limited (ARCH §5)
+// FR-A1 to FR-A4. Public routes. Register and login are rate limited per IP (NFR-5),
+// and login is also locked per email after repeated failures (NFR-6). The limiter runs
+// before validation, so malformed attempts count too. Refresh and logout are not rate limited (ARCH §5)
 // and fail closed with 503 when Redis is down (ADR-005).
 
 // Compared against when the email is unknown, so login takes the same bcrypt time
@@ -52,12 +53,15 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
       select: { id: true, password: true },
     });
 
-    // Unknown email and wrong password take the same path and get the same 401.
+    // Unknown email and wrong password take the same path, count towards the same
+    // lockout, and get the same 401.
     const matches = await bcrypt.compare(input.password, user?.password ?? (await dummyHash));
     if (!user || !matches) {
+      await recordLoginFailure(input.email);
       throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
+    await clearLoginFailures(input.email);
     res.json({ success: true, data: await issueTokenPair(user.id) });
   } catch (err) {
     next(err);
@@ -94,7 +98,7 @@ export const logout = async (req: Request, res: Response, next: NextFunction): P
 const router: Router = Router();
 
 router.post('/register', rateLimiter, register);
-router.post('/login', rateLimiter, login);
+router.post('/login', rateLimiter, loginLockout, login);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
 

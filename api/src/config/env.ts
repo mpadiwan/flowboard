@@ -47,6 +47,9 @@ const EnvSchema = z
     // NFR-5: per-IP limit on login and register.
     RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+    // NFR-6: per-email lockout after this many failed logins, for this long.
+    LOGIN_MAX_FAILURES: z.coerce.number().int().positive().default(5),
+    LOGIN_LOCKOUT_SECONDS: z.coerce.number().int().positive().default(900),
     // Read only by prisma/seed.ts, which refuses to run without it.
     SEED_USER_PASSWORD: z.string().min(8).optional(),
   })

@@ -1,17 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
+import type { NextFunction, Request, Response } from 'express';
+import type { ChainableCommander } from 'ioredis';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import request from 'supertest';
 import app from '../src/app';
 import { env } from '../src/config/env';
+import { logger } from '../src/lib/logger';
 import { prisma } from '../src/lib/prisma';
 import { redis } from '../src/lib/redis';
 import { issueTokenPair, signAccessToken } from '../src/lib/tokens';
+import {
+  clearLoginFailures,
+  loginLockout,
+  recordLoginFailure,
+} from '../src/middleware/loginLockout';
 import { createUser } from './helpers/factories';
 
-// FR-A1 to FR-A4, AC-2.1 to AC-2.5, AC-5.2. Register and login go through the real bcrypt
-// cost, so they register only the users they need; refresh and logout take a stored pair
-// straight from issueTokenPair. Lockout joins with day-12.
+// FR-A1 to FR-A4, AC-2.1 to AC-2.5, AC-4.5, AC-5.2. Register and login go through the real
+// bcrypt cost, so they register only the users they need; refresh and logout take a stored
+// pair straight from issueTokenPair.
 
 const EMAIL = 'ada@flowboard.test';
 const PASSWORD = 'correct horse battery';
@@ -290,6 +298,163 @@ describe('POST /auth/login', () => {
 
     expect(res.status).toBe(422);
     expect((res.body as ErrorResponse).details?.[0]?.path).toBe(path);
+  });
+});
+
+describe('login lockout (NFR-6, AC-4.5)', () => {
+  const FAIL_KEY = `login:fail:${EMAIL}`;
+  const LOCK_KEY = `login:lock:${EMAIL}`;
+
+  async function login(email = EMAIL, password = PASSWORD): Promise<request.Response> {
+    return request(app).post('/auth/login').send({ email, password });
+  }
+
+  async function failTimes(times: number, email = EMAIL): Promise<void> {
+    for (let i = 0; i < times; i += 1) {
+      expect((await login(email, 'wrong-password')).status).toBe(401);
+    }
+  }
+
+  function expectLocked(res: request.Response): void {
+    expect(res.status).toBe(429);
+    expect(res.body).toEqual({
+      success: false,
+      message: 'Too many failed login attempts',
+      code: 'ACCOUNT_LOCKED',
+    });
+    const retryAfter = Number(res.headers['retry-after']);
+    expect(retryAfter).toBeGreaterThan(env.LOGIN_LOCKOUT_SECONDS - 10);
+    expect(retryAfter).toBeLessThanOrEqual(env.LOGIN_LOCKOUT_SECONDS);
+  }
+
+  beforeEach(async () => {
+    await register();
+  });
+
+  it('locks the email after LOGIN_MAX_FAILURES failures, even for the right password', async () => {
+    await failTimes(env.LOGIN_MAX_FAILURES);
+
+    expectLocked(await login());
+    const ttl = await redis.ttl(LOCK_KEY);
+    expect(ttl).toBeGreaterThan(env.LOGIN_LOCKOUT_SECONDS - 10);
+    expect(ttl).toBeLessThanOrEqual(env.LOGIN_LOCKOUT_SECONDS);
+    expect(await redis.exists(FAIL_KEY)).toBe(0);
+  });
+
+  it('stays open one failure short of the limit', async () => {
+    await failTimes(env.LOGIN_MAX_FAILURES - 1);
+
+    expect(await redis.get(FAIL_KEY)).toBe(String(env.LOGIN_MAX_FAILURES - 1));
+    expect(await redis.ttl(FAIL_KEY)).toBeGreaterThan(0);
+    expect((await login()).status).toBe(200);
+  });
+
+  it('locks an unknown email the same way, so the lockout reveals nothing', async () => {
+    const stranger = 'nobody@flowboard.test';
+    await failTimes(env.LOGIN_MAX_FAILURES, stranger);
+
+    expectLocked(await login(stranger));
+    expect((await login()).status).toBe(200);
+  });
+
+  it('resets the count on a successful login', async () => {
+    await failTimes(env.LOGIN_MAX_FAILURES - 1);
+    expect((await login()).status).toBe(200);
+    expect(await redis.exists(FAIL_KEY)).toBe(0);
+
+    await failTimes(env.LOGIN_MAX_FAILURES - 1);
+    expect((await login()).status).toBe(200);
+  });
+
+  it('counts case and whitespace variants of one email together', async () => {
+    const variants = [' ADA@flowboard.test', 'Ada@Flowboard.Test ', EMAIL];
+    for (let i = 0; i < env.LOGIN_MAX_FAILURES; i += 1) {
+      expect((await login(variants[i % variants.length], 'wrong-password')).status).toBe(401);
+    }
+
+    expectLocked(await login());
+  });
+
+  it('does not extend the lock while it is in force', async () => {
+    await redis.set(LOCK_KEY, '1', 'EX', 100);
+
+    expect((await login(EMAIL, 'wrong-password')).status).toBe(429);
+    expect(await redis.ttl(LOCK_KEY)).toBeLessThanOrEqual(100);
+    expect(await redis.exists(FAIL_KEY)).toBe(0);
+  });
+
+  it('falls back to the full window for Retry-After if the lock has no TTL', async () => {
+    await redis.set(LOCK_KEY, '1');
+
+    expectLocked(await login());
+  });
+
+  it.each([
+    ['an invalid email', { email: 'ada', password: 'wrong' }],
+    ['a non-string email', { email: 42, password: 'wrong' }],
+    ['no email', { password: 'wrong' }],
+  ])('passes %s to validation (422) without counting it', async (_label, body) => {
+    const res = await request(app).post('/auth/login').send(body);
+
+    expect(res.status).toBe(422);
+    expect(await redis.keys('login:*')).toEqual([]);
+  });
+
+  describe('when Redis fails (fails open, ADR-005)', () => {
+    // Stands in for redis.multi() to reach the failure branches without stopping Redis.
+    function fakeMulti(exec: () => Promise<unknown>): ChainableCommander {
+      const chain = { incr: () => chain, expire: () => chain, exec };
+      return chain as unknown as ChainableCommander;
+    }
+
+    function expectWarned(warn: jest.SpyInstance, message: string): void {
+      expect(warn).toHaveBeenCalledTimes(1);
+      const [fields, logged] = warn.mock.calls[0] as [{ err: unknown }, string];
+      expect(fields.err).toBeInstanceOf(Error);
+      expect(logged).toBe(message);
+    }
+
+    it('lets the login through when the lock check rejects', async () => {
+      jest.spyOn(redis, 'ttl').mockRejectedValueOnce(new Error('Connection is closed.'));
+      const warn = jest.spyOn(logger, 'warn');
+
+      expect((await login()).status).toBe(200);
+      expectWarned(warn, 'login lockout unavailable — failing open');
+    });
+
+    it('still returns 200 when clearing the count rejects', async () => {
+      failNext('del');
+      const warn = jest.spyOn(logger, 'warn');
+
+      expect((await login()).status).toBe(200);
+      expectWarned(warn, 'login lockout unavailable — failures not cleared');
+    });
+
+    it.each([
+      ['rejects', (): Promise<unknown> => Promise.reject(new Error('Connection is closed.'))],
+      ['returns no replies', (): Promise<unknown> => Promise.resolve(null)],
+    ])('recordLoginFailure logs and resolves when the transaction %s', async (_label, exec) => {
+      jest.spyOn(redis, 'multi').mockReturnValueOnce(fakeMulti(exec));
+      const warn = jest.spyOn(logger, 'warn');
+
+      await expect(recordLoginFailure(EMAIL)).resolves.toBeUndefined();
+      expectWarned(warn, 'login lockout unavailable — failure not recorded');
+    });
+
+    it('clearLoginFailures logs and resolves when DEL rejects', async () => {
+      failNext('del');
+
+      await expect(clearLoginFailures(EMAIL)).resolves.toBeUndefined();
+    });
+  });
+
+  // Called directly: over HTTP, express.json always sets req.body to at least {}.
+  it('passes a request with no body straight through', async () => {
+    const next = jest.fn() as jest.MockedFunction<NextFunction>;
+
+    await loginLockout({} as Request, {} as Response, next);
+
+    expect(next).toHaveBeenCalledWith();
   });
 });
 

@@ -53,6 +53,7 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - Async middleware wraps its whole body in try/catch and calls `next(err)` (Express 4 does not catch async throws).
 - That rule is why `no-misused-promises` (`checksVoidReturn.arguments`) is relaxed only for `src/routes/**` and `src/middleware/**`. Async code in any other folder that is passed as a callback must handle its own promise.
 - Redis-backed middleware decides its failure mode explicitly per ADR-005 and logs at `warn` when failing open.
+- A middleware that keys Redis on a body field before the handler's Zod parse (e.g. `loginLockout`) parses that field with the handler's own schema (`LoginSchema.shape.email`), so both normalise the same way. An invalid field passes through with `next()` and the handler returns the 422.
 
 ## Errors
 
@@ -95,6 +96,7 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 - `expect.stringMatching()` returns `any`; cast it (`as string`) where it's a spread argument, or `no-unsafe-argument` fails lint.
 - Refresh and logout tests take a stored pair from `issueTokenPair(user.id)` after `createUser()`, not from register/login, so only the tests about those two routes pay bcrypt cost 12. To reach a fail-closed branch, `jest.spyOn(redis, 'set' | 'del').mockRejectedValueOnce(...)`, then assert the key is untouched.
 - `expect.any()` / `expect.objectContaining()` return `any` and trip `no-unsafe-assignment`. To assert a logger call, read `spy.mock.calls[0]` with an `as unknown as [...]` tuple cast instead.
+- To test an env variable's parsing, load a fresh `config/env` with `jest.replaceProperty(process, 'env', {...})` inside `jest.isolateModules` (see `loadEnvWith` in `env.test.ts`). The cached `env` the rest of the suite uses stays untouched.
 - To test code that runs at import (`config/env.ts`), load a fresh copy with `jest.requireActual(path)` inside `jest.isolateModules`. `require()` fails `no-require-imports`, and ts-jest leaves `import()` as a real dynamic import that Jest rejects without `--experimental-vm-modules`. Swap env with `jest.replaceProperty(process, 'env', …)` and restore it in a `finally`; stub `process.exit` to throw.
 
 ## Dependencies

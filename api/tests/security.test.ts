@@ -2,10 +2,11 @@ import type { User } from '@prisma/client';
 import request from 'supertest';
 import app from '../src/app';
 import { env } from '../src/config/env';
+import { prisma } from '../src/lib/prisma';
 import { bearer, createUser } from './helpers/factories';
 
-// NFR-4, AC-4.1 to AC-4.3: the security middleware in app.ts, exercised through the real
-// app so the middleware order is under test too.
+// NFR-4, NFR-7, AC-3.5, AC-4.1 to AC-4.3, AC-4.6: the security middleware in app.ts and the
+// day-12 guarantees, exercised through the real app so the middleware order is under test too.
 
 const ALLOWED_ORIGIN = env.ALLOWED_ORIGINS[0];
 const DISALLOWED_ORIGIN = 'https://evil.example.com';
@@ -14,6 +15,12 @@ interface ErrorResponse {
   success: false;
   message: string;
   code: string;
+  stack?: string;
+}
+
+interface BoardResponse {
+  success: true;
+  data: Record<string, unknown> & { id: string };
 }
 
 type Agent = ReturnType<typeof request.agent>;
@@ -110,5 +117,41 @@ describe('body size limit (AC-4.3)', () => {
 
     expect(res.status).toBe(400);
     expect((res.body as ErrorResponse).code).toBe('INVALID_JSON');
+  });
+});
+
+describe('mass assignment (AC-3.5)', () => {
+  it('strips isAdmin and ownerId: the request succeeds and neither is stored', async () => {
+    const other = await createUser();
+
+    const res = await api.post('/boards').send({ name: 'Mine', isAdmin: true, ownerId: other.id });
+
+    expect(res.status).toBe(201);
+    const { data } = res.body as BoardResponse;
+    expect(data).not.toHaveProperty('isAdmin');
+    expect(data.ownerId).toBe(me.id);
+    const stored = await prisma.board.findUniqueOrThrow({ where: { id: data.id } });
+    expect(stored).not.toHaveProperty('isAdmin');
+    expect(stored.ownerId).toBe(me.id);
+  });
+});
+
+describe('production errors (NFR-7, AC-4.6)', () => {
+  it('sends no stack and no internal message on a 500', async () => {
+    jest.spyOn(prisma.board, 'findMany').mockRejectedValueOnce(new Error('connection refused'));
+    const replaced = jest.replaceProperty(env, 'NODE_ENV', 'production');
+    try {
+      const res = await api.get('/boards');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        message: 'Internal server error',
+        code: 'INTERNAL_ERROR',
+      });
+      expect(res.body as ErrorResponse).not.toHaveProperty('stack');
+    } finally {
+      replaced.restore();
+    }
   });
 });
