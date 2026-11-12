@@ -7,6 +7,7 @@ import { requestLogger } from './middleware/requestLogger';
 import auditLogsRouter from './routes/auditLogs';
 import authRouter from './routes/auth';
 import boardsRouter from './routes/boards';
+import healthRouter from './routes/health';
 import tasksRouter from './routes/tasks';
 
 // Builds the Express app without listening, so Supertest can import it (ARCH §3, C1.5).
@@ -28,6 +29,8 @@ app.use(cors({ origin: env.ALLOWED_ORIGINS }));
 app.use(express.json({ limit: '10kb' }));
 
 // Feature routers are mounted here at the root (Nginx strips /api, ADR-002).
+// GET /health and GET /ready are public; a 503 goes through globalErrorHandler.
+app.use('/', healthRouter);
 app.use('/auth', authRouter);
 app.use('/boards', boardsRouter);
 app.use('/tasks', tasksRouter);

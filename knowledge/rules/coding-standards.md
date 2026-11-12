@@ -65,6 +65,7 @@ export const getTask = async (req: Request, res: Response, next: NextFunction): 
 
 - `logger.info/warn/error/debug` only — `console.*` fails lint.
 - Log objects first, message second: `logger.error({ err, taskId }, 'failed to publish task event')`.
+- An `Error` must go under the `err` key: pino serializes errors only there, so `{ db: err }` logs `{}`. Under any other key, log `err.message` (from day-14).
 - Never log request bodies wholesale; redaction is a safety net, not a licence.
 - Levels: `error` = needs attention; `warn` = degraded but handled (e.g. fail-open); `info` = lifecycle events; `debug` = diagnostic detail.
 
