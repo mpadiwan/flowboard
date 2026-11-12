@@ -8,6 +8,14 @@ import { z } from 'zod';
 type JwtDuration = Extract<SignOptions['expiresIn'], string>;
 const isJwtDuration = (value: string): value is JwtDuration => /^\d+[smhd]$/.test(value);
 
+// A comma-separated list such as "http://localhost:5173, https://app.example.com".
+const splitList = (value: string): string[] =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+const isOrigin = (value: string): boolean => z.string().url().safeParse(value).success;
+
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -26,6 +34,13 @@ const EnvSchema = z
       .default('15m'),
     // Used for both the refresh JWT expiry and its Redis key TTL.
     JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+    // NFR-4: CORS sends Access-Control-Allow-Origin only to these origins.
+    ALLOWED_ORIGINS: z
+      .string()
+      .default('http://localhost:5173')
+      .transform(splitList)
+      .refine((origins) => origins.length > 0, 'Must list at least one origin')
+      .refine((origins) => origins.every(isOrigin), 'Each origin must be a URL'),
     // ADR-005: coerced here, so the port can never silently become NaN.
     REDIS_HOST: z.string().min(1).default('redis'),
     REDIS_PORT: z.coerce.number().int().positive().default(6379),

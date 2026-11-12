@@ -143,17 +143,8 @@ describe('globalErrorHandler', () => {
   });
 });
 
+// The 413 and malformed-JSON cases go through the real app in security.test.ts (AC-4.3).
 describe('body-parser errors', () => {
-  // express.json's default 100kb limit applies until day-11 lowers it to 10kb.
-  it('maps an oversized body to 413 PAYLOAD_TOO_LARGE', async () => {
-    const res = await request(app)
-      .post('/tasks')
-      .send({ title: 'a'.repeat(200 * 1024) });
-
-    expect(res.status).toBe(413);
-    expect((res.body as ErrorResponse).code).toBe('PAYLOAD_TOO_LARGE');
-  });
-
   it('maps an unsupported charset to its own 4xx status', async () => {
     const res = await request(app)
       .post('/tasks')
