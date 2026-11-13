@@ -43,6 +43,7 @@ api/tests/                integration tests, one file per route group
 worker/src/               index (bootstrap), consumer loop, handlers/
 worker/tests/             unit tests, Redis + Prisma mocked (npm --prefix worker test)
 nginx/nginx.conf          /api/* → api:3000 with the prefix stripped
+bruno/                    Bruno API collection (Local env → http://localhost/api), one folder per resource
 ```
 
 ## Error Handling
@@ -127,7 +128,7 @@ Only build on what exists. Tick a line when its milestone commit lands.
 - [x] `week-02 complete` — ≥80% coverage verified, Week 1–2 gaps closed
 - [x] `day-11` / `day-12` — helmet, CORS, 10kb limit, ownership, lockout, mass assignment
 - [x] `day-13` / `day-14` — pino-http, `/health`, `/ready`, DLQ docs
-- [ ] `week-03 complete` — Security Gate self-review
+- [x] `week-03 complete` — Security Gate self-review
 
 ## Git Conventions
 

@@ -1,0 +1,48 @@
+meta {
+  name: Refresh
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+script:pre-request {
+  // Kept for Security / Refresh token replay.
+  bru.setVar("previousRefreshToken", bru.getVar("refreshToken"));
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("accessToken", res.body.data.accessToken);
+    bru.setVar("refreshToken", res.body.data.refreshToken);
+  }
+}
+
+tests {
+  test("200 with a new token pair", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data).to.have.all.keys("accessToken", "refreshToken");
+  });
+
+  test("the refresh token is rotated", function() {
+    expect(res.body.data.refreshToken).to.not.equal(bru.getVar("previousRefreshToken"));
+  });
+}
+
+docs {
+  FR-A3, ADR-004. Swaps a refresh token for a new pair. The old token's `jti` is deleted from
+  Redis first, so each refresh token works exactly once. **Security / Refresh token replay**
+  shows the old one being rejected.
+
+  Fails closed: 503 if Redis is down (ADR-005).
+}

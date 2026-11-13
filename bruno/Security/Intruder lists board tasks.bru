@@ -1,0 +1,30 @@
+meta {
+  name: Intruder lists board tasks
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/tasks?boardId={{boardId}}
+  body: none
+  auth: bearer
+}
+
+params:query {
+  boardId: {{boardId}}
+}
+
+auth:bearer {
+  token: {{intruderAccessToken}}
+}
+
+tests {
+  test("403 FORBIDDEN", function() {
+    expect(res.status).to.equal(403);
+    expect(res.body.code).to.equal("FORBIDDEN");
+  });
+}
+
+docs {
+  The `boardId` filter must name one of the caller's own boards.
+}

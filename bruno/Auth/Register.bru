@@ -1,0 +1,51 @@
+meta {
+  name: Register
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{demoEmail}}",
+    "password": "{{demoPassword}}"
+  }
+}
+
+script:pre-request {
+  // A fresh email on every run, so the collection can be re-run without a 409.
+  bru.setVar("demoEmail", `demo+${Date.now()}@flowboard.test`);
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("userId", res.body.data.user.id);
+    bru.setVar("accessToken", res.body.data.accessToken);
+    bru.setVar("refreshToken", res.body.data.refreshToken);
+  }
+}
+
+tests {
+  test("201 with the new user and a token pair", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.data.user.email).to.equal(bru.getVar("demoEmail"));
+    expect(res.body.data.accessToken).to.be.a("string");
+    expect(res.body.data.refreshToken).to.be.a("string");
+  });
+
+  test("never returns the password or its hash", function() {
+    expect(res.body.data.user).to.have.all.keys("id", "email", "createdAt");
+  });
+}
+
+docs {
+  FR-A1. Creates a user and returns a token pair. The password is hashed with bcrypt (cost 12)
+  and never returned. Passwords must be 8+ characters and at most 72 bytes.
+
+  Rate limited per IP (NFR-5), shared with login.
+}

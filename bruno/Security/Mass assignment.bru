@@ -1,0 +1,42 @@
+meta {
+  name: Mass assignment
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/boards
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "Mass assignment attempt",
+    "id": "00000000-0000-4000-8000-0000000000ff",
+    "ownerId": "00000000-0000-4000-8000-000000000000",
+    "isAdmin": true,
+    "createdAt": "2000-01-01T00:00:00.000Z"
+  }
+}
+
+tests {
+  test("201: unknown and protected fields are stripped, not rejected", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("the owner comes from the token, not the body", function() {
+    expect(res.body.data.ownerId).to.equal(bru.getVar("userId"));
+  });
+
+  test("id, createdAt and isAdmin are ignored", function() {
+    expect(res.body.data.id).to.not.equal("00000000-0000-4000-8000-0000000000ff");
+    expect(res.body.data.createdAt).to.not.equal("2000-01-01T00:00:00.000Z");
+    expect(res.body.data).to.not.have.property("isAdmin");
+  });
+}
+
+docs {
+  ADR-007, AC-3.4. Zod's plain `z.object()` strips unknown keys, and Prisma's `data` is built
+  from named fields, never by spreading `req.body`.
+}

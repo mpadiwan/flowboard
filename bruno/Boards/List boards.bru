@@ -1,0 +1,28 @@
+meta {
+  name: List boards
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/boards
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("200 with only the caller's boards", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data).to.be.an("array");
+    const userId = bru.getVar("userId");
+    res.body.data.forEach((board) => expect(board.ownerId).to.equal(userId));
+  });
+
+  test("includes the new board", function() {
+    expect(res.body.data.map((board) => board.id)).to.include(bru.getVar("boardId"));
+  });
+}
+
+docs {
+  FR-B1. Newest first, filtered to the caller's boards.
+}

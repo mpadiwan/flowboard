@@ -53,6 +53,14 @@ docker compose down -v                # stop and delete the database and Redis v
 docker compose up -d --build --renew-anon-volumes
 ```
 
+## Try the API
+
+[`bruno/`](bruno/) is a [Bruno](https://www.usebruno.com/) collection with every endpoint and the security checks (401, 403, 413, 422, 429, mass assignment, refresh-token replay). Open the folder in Bruno, pick the **Local** environment, and run the collection or click through the folders in order. Every request has tests, so a full run is also a smoke test of the stack. The collection's own docs (the collection's settings tab, under Docs) explain the variables and the optional seed-user login.
+
+```bash
+cd bruno && npx @usebruno/cli@4.2.0 run -r --env Local
+```
+
 ## Develop
 
 Install the dependencies on your machine once. They're used by the editor, git hooks, lint and typecheck:

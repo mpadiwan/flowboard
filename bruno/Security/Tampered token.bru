@@ -1,0 +1,28 @@
+meta {
+  name: Tampered token
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/boards
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}x
+}
+
+tests {
+  test("401 UNAUTHORIZED", function() {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("UNAUTHORIZED");
+    expect(res.body.message).to.equal("Invalid or expired token");
+  });
+}
+
+docs {
+  A valid access token with one extra character, so the signature check fails.
+  Expired and tampered tokens get the same response.
+}

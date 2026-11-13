@@ -1,0 +1,23 @@
+meta {
+  name: List tasks
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/tasks
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("200 with tasks across the caller's boards", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data).to.be.an("array");
+    expect(res.body.data.map((task) => task.id)).to.include(bru.getVar("taskId"));
+  });
+}
+
+docs {
+  FR-T1. Without `boardId`, lists the tasks on every board the caller owns, newest first.
+}

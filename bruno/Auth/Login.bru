@@ -1,0 +1,42 @@
+meta {
+  name: Login
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{demoEmail}}",
+    "password": "{{demoPassword}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("accessToken", res.body.data.accessToken);
+    bru.setVar("refreshToken", res.body.data.refreshToken);
+  }
+}
+
+tests {
+  test("200 with a token pair", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data).to.have.all.keys("accessToken", "refreshToken");
+  });
+
+  test("rate limit headers are present", function() {
+    expect(res.headers).to.have.property("ratelimit-limit");
+    expect(res.headers).to.have.property("ratelimit-remaining");
+  });
+}
+
+docs {
+  FR-A2. Logs in as the user created by **Register**. Sets `accessToken` (15 min) and
+  `refreshToken` (7 days), which the rest of the collection uses.
+}

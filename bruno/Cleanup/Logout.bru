@@ -1,0 +1,31 @@
+meta {
+  name: Logout
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/auth/logout
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+tests {
+  test("204 with no body", function() {
+    expect(res.status).to.equal(204);
+  });
+}
+
+docs {
+  FR-A4, ADR-004. Deletes the refresh token's `jti` from Redis. Returns 204 even if it was
+  already gone, so logging out twice is safe.
+
+  The access token stays valid until it expires (15 min): access tokens are checked by
+  signature only, with no Redis lookup.
+}

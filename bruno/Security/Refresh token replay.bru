@@ -1,0 +1,29 @@
+meta {
+  name: Refresh token replay
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{previousRefreshToken}}"
+  }
+}
+
+tests {
+  test("401 INVALID_REFRESH_TOKEN", function() {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_REFRESH_TOKEN");
+  });
+}
+
+docs {
+  ADR-004. Re-sends the refresh token that **Auth / Refresh** already rotated. Its `jti` is
+  gone from Redis, so the replay is rejected.
+}

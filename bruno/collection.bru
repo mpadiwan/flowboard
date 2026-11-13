@@ -1,0 +1,67 @@
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  # FlowBoard API
+
+  Requests for every FlowBoard endpoint, plus the security behaviour checked at the Security Gate.
+  Each request has tests, so the collection doubles as a smoke test of the running stack.
+
+  ## Before you start
+
+  1. Start the stack: `docker compose up -d --build` (from the repo root).
+  2. Pick the **Local** environment (top right). `baseUrl` is `http://localhost/api`, so requests go through Nginx (ADR-002).
+  3. Optional: set the secret `seedPassword` in the Local environment to the `SEED_USER_PASSWORD` from your `.env`. This turns on the **Seed Data** folder.
+
+  ## How it flows
+
+  Run the whole collection with the Runner, or click through the folders in order:
+
+  | Folder     | Shows                                                                     |
+  | ---------- | ------------------------------------------------------------------------- |
+  | Health     | Liveness, readiness, Helmet headers, request ID                           |
+  | Auth       | Register a fresh demo user, login, refresh rotation                       |
+  | Boards     | Create, list and read a board                                             |
+  | Tasks      | Full task CRUD, filtering, partial updates                                |
+  | Audit Logs | Rows written by the worker from `tasks:events` (async, ADR-006)           |
+  | Security   | 401, 403, 404, 413, 422, 429, mass assignment, refresh-token replay       |
+  | Seed Data  | Log in as `dev@flowboard.test` and list the seeded data (skipped if unset) |
+  | Cleanup    | Board delete cascades to tasks, logout, refresh after logout              |
+
+  **Register** creates a new user with a unique email on every run, so the collection can be
+  re-run without clashing with earlier data.
+
+  ## Variables
+
+  Tokens and IDs are runtime variables set by post-response scripts. They live only in
+  Bruno's memory and are never written to a file.
+
+  | Variable                         | Set by                    |
+  | -------------------------------- | ------------------------- |
+  | `demoEmail`, `userId`            | Auth / Register           |
+  | `accessToken`, `refreshToken`    | Register, Login, Refresh  |
+  | `previousRefreshToken`           | Auth / Refresh            |
+  | `boardId`                        | Boards / Create board     |
+  | `taskId`                         | Tasks / Create task       |
+  | `intruderAccessToken`            | Security / Register intruder |
+  | `seedAccessToken`                | Seed Data / Login as seed user |
+
+  ## Limits to keep in mind
+
+  - Register and login share a rate limit of 100 requests per IP per 15 minutes (NFR-5).
+    A full run uses about 10 of them.
+  - Access tokens last 15 minutes. If requests start returning 401, run **Auth / Login** again.
+  - The rate limiter itself is not demoed here: tripping it would block auth for 15 minutes.
+
+  ## From the command line
+
+  ```bash
+  npx @usebruno/cli@4.2.0 run -r --env Local                          # from bruno/
+  npx @usebruno/cli@4.2.0 run -r --env Local --env-var seedPassword=… # include Seed Data
+  ```
+}

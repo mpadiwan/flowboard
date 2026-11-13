@@ -1,0 +1,26 @@
+meta {
+  name: Intruder reads board
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/boards/{{boardId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{intruderAccessToken}}
+}
+
+tests {
+  test("403 FORBIDDEN", function() {
+    expect(res.status).to.equal(403);
+    expect(res.body.code).to.equal("FORBIDDEN");
+  });
+}
+
+docs {
+  ARCH §12 rule 2. Load the resource, 404 if missing, 403 if `ownerId` isn't the caller.
+}

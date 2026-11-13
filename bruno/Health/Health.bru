@@ -1,0 +1,35 @@
+meta {
+  name: Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/health
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 with status ok", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.success).to.equal(true);
+    expect(res.body.data.status).to.equal("ok");
+    expect(res.body.data.uptime).to.be.a("number");
+  });
+
+  test("Helmet security headers are set", function() {
+    expect(res.headers["x-content-type-options"]).to.equal("nosniff");
+    expect(res.headers["x-frame-options"]).to.equal("SAMEORIGIN");
+    expect(res.headers).to.have.property("content-security-policy");
+    expect(res.headers).to.not.have.property("x-powered-by");
+  });
+
+  test("Nginx adds a request ID", function() {
+    expect(res.headers["x-request-id"]).to.be.a("string").and.not.be.empty;
+  });
+}
+
+docs {
+  Liveness probe (FR-H1). Public, and checks no dependencies, so a Postgres or Redis outage never fails it.
+}

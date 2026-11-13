@@ -1,0 +1,21 @@
+meta {
+  name: Delete board
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{baseUrl}}/boards/{{boardId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("204 with no body", function() {
+    expect(res.status).to.equal(204);
+  });
+}
+
+docs {
+  FR-B4, ADR-003. The board's remaining tasks are deleted with it (`onDelete: Cascade`).
+}

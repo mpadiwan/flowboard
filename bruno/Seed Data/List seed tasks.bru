@@ -1,0 +1,37 @@
+meta {
+  name: List seed tasks
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/tasks?boardId=00000000-0000-4000-8000-00000000b001
+  body: none
+  auth: bearer
+}
+
+params:query {
+  boardId: 00000000-0000-4000-8000-00000000b001
+}
+
+auth:bearer {
+  token: {{seedAccessToken}}
+}
+
+script:pre-request {
+  if (!bru.getVar("seedAccessToken")) {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("200 with the seeded tasks on the first board", function() {
+    expect(res.status).to.equal(200);
+    const ids = res.body.data.map((task) => task.id);
+    expect(ids).to.include.members([
+      "00000000-0000-4000-8000-00000000a001",
+      "00000000-0000-4000-8000-00000000a002",
+      "00000000-0000-4000-8000-00000000a003"
+    ]);
+  });
+}

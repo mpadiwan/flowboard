@@ -1,0 +1,22 @@
+meta {
+  name: Invalid id
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/boards/not-a-uuid
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("422 on a non-UUID id", function() {
+    expect(res.status).to.equal(422);
+    expect(res.body.details[0].path).to.equal("id");
+  });
+}
+
+docs {
+  AC-3.2. Route params are validated too, so a bad id never reaches the database.
+}

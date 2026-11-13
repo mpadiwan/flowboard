@@ -1,0 +1,18 @@
+meta {
+  name: Get deleted task
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/tasks/{{taskId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("404 TASK_NOT_FOUND", function() {
+    expect(res.status).to.equal(404);
+    expect(res.body.code).to.equal("TASK_NOT_FOUND");
+  });
+}

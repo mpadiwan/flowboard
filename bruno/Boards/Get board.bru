@@ -1,0 +1,23 @@
+meta {
+  name: Get board
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/boards/{{boardId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("200 with the board", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data.id).to.equal(bru.getVar("boardId"));
+  });
+}
+
+docs {
+  FR-B3. 404 `BOARD_NOT_FOUND` if it doesn't exist, 403 `FORBIDDEN` if someone else owns it,
+  422 if the id isn't a UUID.
+}

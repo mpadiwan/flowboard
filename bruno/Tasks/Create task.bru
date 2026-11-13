@@ -1,0 +1,53 @@
+meta {
+  name: Create task
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/tasks
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "title": "Draft the launch announcement",
+    "description": "Blog post and email for the v1 release.",
+    "priority": "HIGH",
+    "boardId": "{{boardId}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("taskId", res.body.data.id);
+  }
+}
+
+tests {
+  test("201 with the task", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.data.title).to.equal("Draft the launch announcement");
+    expect(res.body.data.priority).to.equal("HIGH");
+    expect(res.body.data.boardId).to.equal(bru.getVar("boardId"));
+  });
+
+  test("status defaults to TODO", function() {
+    expect(res.body.data.status).to.equal("TODO");
+  });
+}
+
+docs {
+  FR-T2. The board must belong to the caller.
+
+  | Field         | Rules                                              |
+  | ------------- | -------------------------------------------------- |
+  | `title`       | required, 1–255 characters after trimming          |
+  | `description` | optional, up to 5000 characters                    |
+  | `priority`    | `LOW`, `MEDIUM` (default), `HIGH`                  |
+  | `status`      | `TODO` (default), `IN_PROGRESS`, `REVIEW`, `DONE`  |
+  | `boardId`     | required UUID of one of your boards                |
+
+  Publishes a `CREATED` event to `tasks:events`; the worker writes the audit row.
+}

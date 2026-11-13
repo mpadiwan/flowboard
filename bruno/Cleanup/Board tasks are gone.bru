@@ -1,0 +1,23 @@
+meta {
+  name: Board tasks are gone
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/tasks
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("no task from the deleted board is left", function() {
+    expect(res.status).to.equal(200);
+    const boardId = bru.getVar("boardId");
+    expect(res.body.data.filter((task) => task.boardId === boardId)).to.be.empty;
+  });
+}
+
+docs {
+  **Tasks / Create task - defaults** left one task on the board; the cascade removed it.
+}

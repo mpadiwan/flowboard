@@ -1,0 +1,26 @@
+meta {
+  name: No token
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/boards
+  body: none
+  auth: none
+}
+
+tests {
+  test("401 UNAUTHORIZED", function() {
+    expect(res.status).to.equal(401);
+    expect(res.body).to.deep.equal({
+      success: false,
+      message: "Authentication required",
+      code: "UNAUTHORIZED"
+    });
+  });
+}
+
+docs {
+  ARCH §12 rule 1. Every board, task and audit route needs `Authorization: Bearer <accessToken>`.
+}

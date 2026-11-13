@@ -1,0 +1,23 @@
+meta {
+  name: List audit logs - limit out of range
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/audit-logs?limit=500
+  body: none
+  auth: inherit
+}
+
+params:query {
+  limit: 500
+}
+
+tests {
+  test("422 VALIDATION_ERROR on limit", function() {
+    expect(res.status).to.equal(422);
+    expect(res.body.code).to.equal("VALIDATION_ERROR");
+    expect(res.body.details[0].path).to.equal("limit");
+  });
+}

@@ -1,0 +1,28 @@
+meta {
+  name: Refresh after logout
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+tests {
+  test("401 INVALID_REFRESH_TOKEN", function() {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_REFRESH_TOKEN");
+  });
+}
+
+docs {
+  The logged-out refresh token can't be used again.
+}

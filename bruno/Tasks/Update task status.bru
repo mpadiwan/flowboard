@@ -1,0 +1,34 @@
+meta {
+  name: Update task status
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/tasks/{{taskId}}
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "status": "IN_PROGRESS"
+  }
+}
+
+tests {
+  test("200 with the new status", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data.status).to.equal("IN_PROGRESS");
+  });
+
+  test("fields not sent are unchanged", function() {
+    expect(res.body.data.title).to.equal("Draft the launch announcement");
+    expect(res.body.data.priority).to.equal("HIGH");
+  });
+}
+
+docs {
+  FR-T4. A partial update: send any of `title`, `description`, `priority`, `status`.
+  At least one is required. `boardId` is stripped, so a task can't move boards.
+}

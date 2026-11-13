@@ -1,0 +1,43 @@
+meta {
+  name: Login as seed user
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{seedEmail}}",
+    "password": "{{seedPassword}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("seedPassword")) {
+    bru.runner.skipRequest();
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("seedAccessToken", res.body.data.accessToken);
+  }
+}
+
+tests {
+  test("200 with a token pair", function() {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Logs in as `dev@flowboard.test`, created by `npx prisma db seed`. Set the secret `seedPassword`
+  in the Local environment to `SEED_USER_PASSWORD` from `.env`; without it this folder is skipped.
+
+  Uses its own `seedAccessToken`, so the demo user's session is untouched.
+}

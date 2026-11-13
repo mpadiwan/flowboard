@@ -1,0 +1,46 @@
+meta {
+  name: List audit logs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/audit-logs?limit=20
+  body: none
+  auth: inherit
+}
+
+params:query {
+  limit: 20
+}
+
+script:pre-request {
+  // The worker writes these rows from tasks:events after each response (ADR-006),
+  // so give it a moment to catch up.
+  await bru.sleep(1500);
+}
+
+tests {
+  test("200 with at most 20 of the caller's rows", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data).to.be.an("array").with.length.at.most(20);
+    const userId = bru.getVar("userId");
+    res.body.data.forEach((row) => expect(row.userId).to.equal(userId));
+  });
+
+  test("the task's whole lifecycle was audited", function() {
+    const taskId = bru.getVar("taskId");
+    const actions = res.body.data
+      .filter((row) => row.entity === "Task" && row.entityId === taskId)
+      .map((row) => row.action);
+    expect(actions).to.include.members(["CREATED", "UPDATED", "DELETED"]);
+  });
+}
+
+docs {
+  FR-L1. The caller's own audit rows, newest first. `limit` is 1–100 (default 50).
+
+  Task mutations publish to the `tasks:events` Redis Stream; the worker reads them through the
+  `audit-group` consumer group and writes these rows. A message that fails 3 deliveries goes to
+  `tasks:events:dlq` (see AGENTS.md).
+}

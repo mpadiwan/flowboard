@@ -1,0 +1,34 @@
+meta {
+  name: Register intruder
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "intruder+{{$timestamp}}@flowboard.test",
+    "password": "{{demoPassword}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("intruderAccessToken", res.body.data.accessToken);
+  }
+}
+
+tests {
+  test("201", function() {
+    expect(res.status).to.equal(201);
+  });
+}
+
+docs {
+  A second user, used by the next three requests to try to reach the demo user's board.
+}

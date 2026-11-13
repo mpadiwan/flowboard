@@ -1,0 +1,25 @@
+meta {
+  name: Ready
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/ready
+  body: none
+  auth: none
+}
+
+tests {
+  test("200 with Postgres and Redis ok", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data).to.deep.equal({ status: "ready", db: "ok", redis: "ok" });
+  });
+}
+
+docs {
+  Readiness probe (FR-H2). Runs `SELECT 1` against Postgres and `PING` against Redis in parallel,
+  each with a 2 s timeout. Returns 503 `NOT_READY` if either fails.
+
+  Demo: `docker compose stop redis`, send this again, then `docker compose start redis`.
+}

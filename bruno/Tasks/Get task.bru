@@ -1,0 +1,22 @@
+meta {
+  name: Get task
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/tasks/{{taskId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("200 with the task", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data.id).to.equal(bru.getVar("taskId"));
+  });
+}
+
+docs {
+  FR-T3. Ownership is checked through the task's board (ADR-003).
+}

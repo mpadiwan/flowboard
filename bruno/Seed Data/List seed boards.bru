@@ -1,0 +1,32 @@
+meta {
+  name: List seed boards
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/boards
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{seedAccessToken}}
+}
+
+script:pre-request {
+  if (!bru.getVar("seedAccessToken")) {
+    bru.runner.skipRequest();
+  }
+}
+
+tests {
+  test("200 with the seeded boards", function() {
+    expect(res.status).to.equal(200);
+    const ids = res.body.data.map((board) => board.id);
+    expect(ids).to.include.members([
+      "00000000-0000-4000-8000-00000000b001",
+      "00000000-0000-4000-8000-00000000b002"
+    ]);
+  });
+}

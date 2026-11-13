@@ -1,0 +1,28 @@
+meta {
+  name: List tasks by board
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/tasks?boardId={{boardId}}
+  body: none
+  auth: inherit
+}
+
+params:query {
+  boardId: {{boardId}}
+}
+
+tests {
+  test("200 with only that board's tasks", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data).to.have.lengthOf(2);
+    const boardId = bru.getVar("boardId");
+    res.body.data.forEach((task) => expect(task.boardId).to.equal(boardId));
+  });
+}
+
+docs {
+  FR-T1. `boardId` must be one of the caller's boards: 404 if it doesn't exist, 403 if it isn't theirs.
+}

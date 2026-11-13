@@ -1,0 +1,30 @@
+meta {
+  name: Update task - clear description
+  type: http
+  seq: 7
+}
+
+patch {
+  url: {{baseUrl}}/tasks/{{taskId}}
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "description": null,
+    "priority": "MEDIUM"
+  }
+}
+
+tests {
+  test("200 with the description cleared", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data.description).to.equal(null);
+    expect(res.body.data.priority).to.equal("MEDIUM");
+  });
+}
+
+docs {
+  `null` clears the description; leaving a field out keeps it.
+}

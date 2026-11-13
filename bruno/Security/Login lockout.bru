@@ -1,0 +1,56 @@
+meta {
+  name: Login lockout
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{lockoutEmail}}",
+    "password": "wrong-password"
+  }
+}
+
+script:pre-request {
+  // Fail loginMaxFailures times first, so this request is the one that hits the lock.
+  // The email is new each run and never registered: unknown emails are locked out too.
+  const email = `lockout+${Date.now()}@flowboard.test`;
+  bru.setVar("lockoutEmail", email);
+  const attempts = Number(bru.getEnvVar("loginMaxFailures"));
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await bru.sendRequest({
+        method: "POST",
+        url: `${bru.getEnvVar("baseUrl")}/auth/login`,
+        headers: { "Content-Type": "application/json" },
+        data: { email, password: "wrong-password" }
+      });
+    } catch (err) {
+      // Expected: each attempt is a 401 INVALID_CREDENTIALS.
+    }
+  }
+}
+
+tests {
+  test("429 ACCOUNT_LOCKED", function() {
+    expect(res.status).to.equal(429);
+    expect(res.body.code).to.equal("ACCOUNT_LOCKED");
+  });
+
+  test("Retry-After says when to try again", function() {
+    expect(Number(res.headers["retry-after"])).to.be.above(0);
+  });
+}
+
+docs {
+  NFR-6. After 5 failed logins for one email, login returns 429 for 15 minutes, whether or
+  not the account exists. The pre-request script makes the 5 failed attempts.
+
+  This uses 6 of the 100 auth requests per IP per 15 minutes (NFR-5).
+}

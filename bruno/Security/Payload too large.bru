@@ -1,0 +1,33 @@
+meta {
+  name: Payload too large
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/boards
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "replaced by the pre-request script"
+  }
+}
+
+script:pre-request {
+  // 12 KB: over Express's 10kb limit, under Nginx's 16k, so the api answers with its own JSON 413.
+  req.setBody({ name: "x".repeat(12 * 1024) });
+}
+
+tests {
+  test("413 PAYLOAD_TOO_LARGE", function() {
+    expect(res.status).to.equal(413);
+    expect(res.body.code).to.equal("PAYLOAD_TOO_LARGE");
+  });
+}
+
+docs {
+  `express.json({ limit: '10kb' })`. Also bounds the input Zod has to parse (OQ-8).
+}

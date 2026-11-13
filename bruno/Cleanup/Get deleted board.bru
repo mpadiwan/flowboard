@@ -1,0 +1,18 @@
+meta {
+  name: Get deleted board
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/boards/{{boardId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("404 BOARD_NOT_FOUND", function() {
+    expect(res.status).to.equal(404);
+    expect(res.body.code).to.equal("BOARD_NOT_FOUND");
+  });
+}

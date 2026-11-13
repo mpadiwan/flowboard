@@ -1,0 +1,22 @@
+meta {
+  name: Delete task
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/tasks/{{taskId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("204 with no body", function() {
+    expect(res.status).to.equal(204);
+    expect(res.body).to.satisfy((body) => body === undefined || body === null || body === "");
+  });
+}
+
+docs {
+  FR-T5. Publishes a `DELETED` event carrying a snapshot of the task.
+}

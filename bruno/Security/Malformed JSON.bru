@@ -1,0 +1,30 @@
+meta {
+  name: Malformed JSON
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/boards
+  body: text
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:text {
+  {"name": "missing closing brace"
+}
+
+tests {
+  test("400 INVALID_JSON", function() {
+    expect(res.status).to.equal(400);
+    expect(res.body.code).to.equal("INVALID_JSON");
+  });
+}
+
+docs {
+  A body that isn't valid JSON gets a 400 in the standard error shape, not a stack trace.
+}

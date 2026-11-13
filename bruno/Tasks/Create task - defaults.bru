@@ -1,0 +1,31 @@
+meta {
+  name: Create task - defaults
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/tasks
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "title": "Book the launch venue",
+    "boardId": "{{boardId}}"
+  }
+}
+
+tests {
+  test("201 with default priority and status", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.data.priority).to.equal("MEDIUM");
+    expect(res.body.data.status).to.equal("TODO");
+    expect(res.body.data.description).to.equal(null);
+  });
+}
+
+docs {
+  Only the required fields. Priority defaults to `MEDIUM` and status to `TODO`.
+}

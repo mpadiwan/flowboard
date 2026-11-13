@@ -1,0 +1,34 @@
+meta {
+  name: Register - email taken
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{demoEmail}}",
+    "password": "{{demoPassword}}"
+  }
+}
+
+tests {
+  test("409 EMAIL_TAKEN", function() {
+    expect(res.status).to.equal(409);
+    expect(res.body).to.deep.equal({
+      success: false,
+      message: "Email is already registered",
+      code: "EMAIL_TAKEN"
+    });
+  });
+}
+
+docs {
+  Registers the same email again. The unique constraint is caught at insert time rather than
+  pre-checked, so two concurrent registrations can't both succeed.
+}

@@ -1,0 +1,39 @@
+meta {
+  name: Create board
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/boards
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "Product Launch"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("boardId", res.body.data.id);
+  }
+}
+
+tests {
+  test("201 with the board", function() {
+    expect(res.status).to.equal(201);
+    expect(res.body.data.name).to.equal("Product Launch");
+  });
+
+  test("owned by the caller", function() {
+    expect(res.body.data.ownerId).to.equal(bru.getVar("userId"));
+  });
+}
+
+docs {
+  FR-B2. `name` is 1–100 characters after trimming. The owner always comes from the access
+  token, never from the body.
+}

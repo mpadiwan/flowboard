@@ -1,0 +1,26 @@
+meta {
+  name: Intruder lists boards
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/boards
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{intruderAccessToken}}
+}
+
+tests {
+  test("200 with none of the demo user's boards", function() {
+    expect(res.status).to.equal(200);
+    expect(res.body.data).to.deep.equal([]);
+  });
+}
+
+docs {
+  List queries filter by owner, so other users' boards are never listed.
+}
